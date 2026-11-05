@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inicio · BAT 360 Merch</title>
+<style>
+  :root{ --bg:#ffffff; --txt:#1b2a47; --muted:#6c7a92; --line:#dde4ee; --brand:#1d3b78; --soft:#f2f5fa; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#1F2224; --txt:#EDEBE5; --muted:#9C9A92; --line:#33363A; --brand:#7FB4D4; --soft:#26292B; } }
+  *{box-sizing:border-box}
+  body{margin:0;padding:28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.55;max-width:760px}
+  h1{font-size:22px;margin:0 0 6px}
+  p{margin:8px 0;color:var(--muted)}
+  .card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:16px}
+  .card h2{font-size:15px;margin:0 0 6px;color:var(--txt)}
+  code{background:var(--bg);border:1px solid var(--line);padding:1px 6px;border-radius:5px;font-size:12.5px}
+  ol{margin:6px 0 0;padding-left:20px;color:var(--muted)}
+</style>
+</head>
+<body>
+  <h1>📦 BAT 360 Merch</h1>
+  <p>Este es el espacio de Merch, separado del resto de BAT 360 para que cada servicio tenga su propia web y no se sature. Todavía no tiene vistas: es la base lista para empezar a subir información.</p>
+  <div class="card">
+    <h2>Cómo se suma una vista nueva</h2>
+    <ol>
+      <li>Se crea la página de la vista (un <code>.html</code>, por ejemplo <code>ots.html</code>) en la carpeta del sitio.</li>
+      <li>Se agrega una línea en <code>site-config.js</code> con su nombre, ícono y archivo: aparece sola en el menú lateral.</li>
+    </ol>
+  </div>
+  <div class="card">
+    <h2>Quién puede entrar</h2>
+    <p style="margin:0">Hoy solo ccamarena@ttaudit.com. Para dar acceso a otra persona se agrega su correo en <code>site-config.js</code>.</p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BAT 360</title>
+<style>
+  :root{
+    --bg:#eef1f6; --panel:#ffffff; --panel2:#f2f5fa; --line:#dde4ee;
+    --txt:#1b2a47; --muted:#6c7a92; --brand:#1d3b78; --brand2:#2d5bb0;
+    --navy:#15264a; --gold:#f4b500; --bad:#d6453d; --good:#1f9d57;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+  .app{display:flex;min-height:100vh}
+  .side{width:240px;background:var(--navy);position:fixed;top:0;bottom:0;left:0;display:flex;flex-direction:column;padding:18px 0;z-index:20}
+  .brand{padding:0 20px 18px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:10px}
+  .brand h1{font-size:18px;letter-spacing:.5px;color:#fff}
+  .brand h1 b{color:var(--gold)}
+  .brand p{font-size:11px;color:#9fb0cc;margin-top:2px}
+  .nav{flex:1;overflow-y:auto}
+  .nav a{display:flex;align-items:center;gap:10px;padding:11px 20px;color:#aeb9d1;cursor:pointer;font-size:13.5px;border-left:3px solid transparent;text-decoration:none}
+  .nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+  .nav a.active{background:rgba(255,255,255,.09);color:#fff;border-left-color:var(--gold)}
+  .nav a .ico{width:18px;text-align:center}
+  .nav .sec{padding:14px 20px 6px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#6d7da0}
+  .side-foot{padding:12px 20px 0;border-top:1px solid rgba(255,255,255,.12);font-size:11.5px;color:#9fb0cc}
+  .side-foot a{color:#9fb0cc;text-decoration:underline;cursor:pointer}
+  .main{margin-left:240px;flex:1;padding:24px 30px;max-width:calc(100vw - 240px)}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .topbar h2{font-size:22px}
+  .topbar .sub{font-size:12px;color:var(--muted);margin-top:2px;max-width:70ch;line-height:1.45}
+  .status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600}
+  .btn:hover{background:var(--line)}
+  .frame-wrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(21,38,74,.05)}
+  .frame-wrap iframe{width:100%;border:none;display:block;min-height:80vh}
+  .hide{display:none!important}
+  .menu-btn{display:none}
+  @media (max-width:820px){
+    .side{transform:translateX(-100%);transition:.2s}
+    .side.open{transform:none}
+    .main{margin-left:0;max-width:100vw;padding:16px}
+    .menu-btn{display:inline-block}
+  }
+</style>
+</head>
+<body>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="site-config.js"></script>
+
+<!-- LOGIN -->
+<div id="login" style="position:fixed;inset:0;z-index:200;background:var(--navy);display:flex;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:34px 30px;width:340px;max-width:90vw;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3)">
+    <h1 style="font-size:22px;color:var(--navy)">BAT <b style="color:var(--gold)">360</b> <span id="login-area" style="font-size:16px;color:var(--brand2)"></span></h1>
+    <p style="font-size:12px;color:var(--muted);margin:4px 0 20px">Gestión de cuenta · TT Audit</p>
+    <div id="g-btn" style="display:flex;justify-content:center;min-height:44px"></div>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:12px">Ingresa con tu cuenta @ttaudit.com</p>
+    <p id="login-err" style="color:var(--bad);font-size:12px;margin-top:10px;display:none">Esta cuenta no tiene acceso a esta plataforma.</p>
+  </div>
+</div>
+
+<div class="app" style="display:none" id="appRoot">
+  <aside class="side" id="side">
+    <div class="brand">
+      <h1>BAT <b>360</b></h1>
+      <p id="brand-area"></p>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot"><span id="user-txt"></span> · <a onclick="salir()">Salir</a></div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <button class="btn menu-btn" onclick="document.getElementById('side').classList.toggle('open')" aria-label="Menú">☰</button>
+        <div>
+          <h2 id="view-title"></h2>
+          <div class="sub" id="view-sub"></div>
+        </div>
+      </div>
+    </div>
+    <div id="frames"></div>
+  </main>
+</div>
+
+<script>
+/* Shell genérico de BAT 360: login con Google + menú lateral + una vista (iframe) por entrada del menú.
+   Para agregar una vista: sube su página .html a esta carpeta y añade una entrada en `vistas` de site-config.js. */
+const SITE = window.SITE;
+document.title = 'BAT 360 — ' + SITE.nombre + ' | TT Audit';
+document.getElementById('brand-area').textContent = SITE.nombre + ' · TT Audit';
+document.getElementById('login-area').textContent = SITE.nombre;
+
+let USER = null;
+const puedeVista = id => !!USER && (USER.vistas.includes('*') || USER.vistas.includes(id));
+const el = id => document.getElementById(id);
+
+function decodeJwt(t){
+  const p=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+  return JSON.parse(decodeURIComponent(atob(p).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join('')));
+}
+function onGoogle(resp){
+  try{
+    const p=decodeJwt(resp.credential), email=(p.email||'').toLowerCase();
+    if(!p.email_verified || !SITE.usuarios[email]){ el('login-err').style.display='block'; return; }
+    sessionStorage.setItem('bat_cred_'+SITE.id, resp.credential);
+    iniciarSesion(email, p.name);
+  }catch(e){ el('login-err').style.display='block'; }
+}
+
+function construirMenu(){
+  const nav = el('nav'); nav.innerHTML='';
+  let seccion=null;
+  SITE.vistas.filter(v=>puedeVista(v.id)).forEach(v=>{
+    if(v.seccion && v.seccion!==seccion){ seccion=v.seccion; const s=document.createElement('div'); s.className='sec'; s.textContent=seccion; nav.appendChild(s); }
+    const a=document.createElement('a'); a.dataset.view=v.id; a.href='#'+v.id;
+    a.innerHTML='<span class="ico">'+v.icono+'</span> '+v.titulo;
+    nav.appendChild(a);
+  });
+}
+function mostrar(id){
+  const v = SITE.vistas.find(x=>x.id===id && puedeVista(x.id)) || SITE.vistas.find(x=>puedeVista(x.id));
+  if(!v) return;
+  el('view-title').textContent = v.titulo;
+  el('view-sub').textContent = v.sub || '';
+  document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active', a.dataset.view===v.id));
+  // un iframe por vista; se crea al abrirla y se conserva (no pierde los archivos ya cargados al cambiar de vista)
+  let wrap = el('frame-'+v.id);
+  if(!wrap){
+    wrap = document.createElement('div'); wrap.className='frame-wrap'; wrap.id='frame-'+v.id;
+    const f = document.createElement('iframe'); f.src=v.src; f.title=v.titulo;
+    wrap.appendChild(f); el('frames').appendChild(wrap);
+  }
+  document.querySelectorAll('#frames .frame-wrap').forEach(w=>w.classList.toggle('hide', w!==wrap));
+  el('side').classList.remove('open');
+  window.scrollTo(0,0);
+}
+// las páginas embebidas avisan su alto por postMessage ({h:...}); se ajusta el iframe que lo envió
+window.addEventListener('message', ev=>{
+  if(!ev.data || !ev.data.h) return;
+  document.querySelectorAll('#frames iframe').forEach(f=>{ if(f.contentWindow===ev.source) f.style.height=(ev.data.h+24)+'px'; });
+});
+window.addEventListener('hashchange', ()=>{ if(USER) mostrar(location.hash.slice(1)); });
+
+function iniciarSesion(email, nombre){
+  USER = SITE.usuarios[email];
+  el('user-txt').textContent = nombre || email;
+  el('login').style.display='none';
+  el('appRoot').style.display='flex';
+  construirMenu();
+  mostrar(location.hash.slice(1));
+}
+function salir(){
+  sessionStorage.removeItem('bat_cred_'+SITE.id);
+  if(window.google&&google.accounts) google.accounts.id.disableAutoSelect();
+  location.hash=''; location.reload();
+}
+
+(function initLogin(){
+  const cred=sessionStorage.getItem('bat_cred_'+SITE.id);
+  if(cred){
+    try{
+      const p=decodeJwt(cred), email=(p.email||'').toLowerCase();
+      if(p.exp*1000>Date.now() && SITE.usuarios[email]){ iniciarSesion(email,p.name); return; }
+    }catch(e){}
+    sessionStorage.removeItem('bat_cred_'+SITE.id);
+  }
+  const t=setInterval(()=>{
+    if(!(window.google&&google.accounts&&google.accounts.id)) return;
+    clearInterval(t);
+    google.accounts.id.initialize({client_id:SITE.googleClientId, callback:onGoogle, hd:'ttaudit.com'});
+    google.accounts.id.renderButton(el('g-btn'),{theme:'outline',size:'large',text:'signin_with',width:260});
+  },100);
+})();
+</script>
+</body>
+</html>

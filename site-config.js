@@ -1,0 +1,18 @@
+/* Configuración de BAT 360 Merch.
+   - usuarios: correos con acceso y qué vistas ven ('*' = todas). Para dar acceso a otra persona: agrega su correo.
+   - vistas: entradas del menú lateral. Para sumar una vista nueva: sube su .html a esta carpeta y agrega una línea aquí. */
+window.SITE = {
+  id: 'merch',
+  nombre: 'Merch',
+  // Mismo Client ID de Google que BAT 360. OJO: este dominio nuevo debe agregarse en Google Cloud → "Orígenes JavaScript autorizados".
+  googleClientId: '382427877987-j68n1tmm6ers3biekqamem2jlrdguubj.apps.googleusercontent.com',
+  usuarios: {
+    'ccamarena@ttaudit.com': { vistas: ['*'] }
+    // 'mcarhuallanqui@ttaudit.com': { vistas: ['*'] },
+  },
+  vistas: [
+    { id: 'inicio', seccion: 'Merch', icono: '🏠', titulo: 'Inicio',
+      sub: 'Espacio de Merch de BAT 360. Aquí se irán sumando las vistas.',
+      src: 'inicio.html' }
+  ]
+};
