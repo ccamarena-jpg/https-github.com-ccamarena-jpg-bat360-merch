@@ -11,6 +11,9 @@ window.SITE = {
     // 'mcarhuallanqui@ttaudit.com': { vistas: ['*'] },
   },
   vistas: [
+    { id: 'consolidado', seccion: 'Merch', icono: '📋', titulo: 'Consolidado',
+      sub: 'Órdenes de trabajo del consolidado (hoja NUEVO 2222): programadas, reportadas, efectivas y no efectivas por proyecto, equipo y distrito.',
+      src: 'consolidado.html' },
     { id: 'inicio', seccion: 'Merch', icono: '🏠', titulo: 'Inicio',
       sub: 'Espacio de Merch de BAT 360. Aquí se irán sumando las vistas.',
       src: 'inicio.html' }

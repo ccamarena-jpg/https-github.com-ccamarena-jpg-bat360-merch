@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consolidado · BAT 360 Merch</title>
+<style>
+  :root{ --bg:#ffffff; --txt:#1b2a47; --muted:#6c7a92; --line:#dde4ee; --brand:#1d3b78; --soft:#f2f5fa;
+         --good:#1f9d57; --bad:#d6453d; --warn:#e0a100; --pend:#b8c2d6; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#1F2224; --txt:#EDEBE5; --muted:#9C9A92; --line:#33363A; --brand:#7FB4D4; --soft:#26292B; --good:#4cc283; --bad:#ef7a73; --warn:#f0c040; --pend:#5a6272; } }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
+  h3{font-size:14px;margin:0 0 8px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{background:var(--soft);border:1px solid var(--line);color:var(--txt);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600}
+  .btn:hover{background:var(--line)} .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .btn[hidden]{display:none}
+  .status{font-size:12.5px;color:var(--muted)} .status.ok{color:var(--good)} .status.err{color:var(--bad)}
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px}
+  .filters label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+  select,input[type=text]{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--txt);font-size:13px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .kpi b{display:block;font-size:24px;line-height:1.15} .kpi span{font-size:11.5px;color:var(--muted)}
+  .kpi.good b{color:var(--good)} .kpi.bad b{color:var(--bad)}
+  .card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .tab{padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:12px;color:var(--muted)}
+  .tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);cursor:pointer;white-space:nowrap;user-select:none}
+  td.n,th.n{text-align:right;white-space:nowrap}
+  .bar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:var(--line);min-width:90px}
+  .bar i{display:block;height:100%} .bar .g{background:var(--good)} .bar .r{background:var(--bad)} .bar .p{background:var(--pend)}
+  .scroll{overflow-x:auto;max-height:520px;overflow-y:auto}
+  .chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .chip.efectivo{background:rgba(31,157,87,.15);color:var(--good)} .chip.noefectivo{background:rgba(214,69,61,.15);color:var(--bad)} .chip.pendiente{background:rgba(120,130,150,.18);color:var(--muted)}
+  .days{display:flex;align-items:flex-end;gap:3px;height:110px;margin-top:6px}
+  .day{flex:1;min-width:8px;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;height:100%;position:relative}
+  .day i{display:block} .day .g{background:var(--good)} .day .r{background:var(--bad)} .day .p{background:var(--pend)}
+  .daylbl{display:flex;gap:3px;font-size:9.5px;color:var(--muted);margin-top:3px}
+  .daylbl span{flex:1;min-width:8px;text-align:center;overflow:hidden}
+  .hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
+  .legend{display:flex;gap:12px;font-size:11.5px;color:var(--muted);margin:4px 0}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+  a{color:var(--brand)}
+</style>
+</head>
+<body>
+
+<div class="row">
+  <button class="btn primary" id="msConnect">🔐 Conectar con SharePoint (en vivo)</button>
+  <button class="btn" id="msRefresh" hidden>🔄 Actualizar</button>
+  <label class="btn" style="margin:0">📂 Cargar Excel manual<input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" hidden></label>
+  <button class="btn" id="sampleBtn">Ver con datos de ejemplo</button>
+  <span class="status" id="status">Sin datos todavía. Conecta con SharePoint para leer el consolidado (hoja NUEVO 2222).</span>
+  <span class="status" id="msUser"></span>
+</div>
+
+<div id="app" hidden>
+  <div class="filters">
+    <div><label>Mes</label><select id="fMes"></select></div>
+    <div><label>Contar por fecha</label>
+      <select id="fBase"><option value="prog">Programada (nuestra)</option><option value="rep">Reportada (cliente)</option></select></div>
+    <div><label>Proyecto</label><select id="fProyecto"></select></div>
+    <div><label>Cadena</label><select id="fCadena"></select></div>
+    <div><label>Equipo</label><select id="fEquipo"></select></div>
+    <div><label>Distrito</label><select id="fDistrito"></select></div>
+    <div><label>Resultado</label><select id="fRes"><option value="">Todos</option><option value="efectivo">Efectivo</option><option value="noefectivo">No efectivo</option><option value="pendiente">Pendiente</option></select></div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>Día a día del mes <span class="status" id="dayBasis"></span></h3>
+    <div class="legend"><span><i style="background:var(--good)"></i>Efectivo</span><span><i style="background:var(--bad)"></i>No efectivo</span><span><i style="background:var(--pend)"></i>Pendiente</span></div>
+    <div class="days" id="days"></div><div class="daylbl" id="dayLbl"></div>
+  </div>
+
+  <div class="card">
+    <div class="tabs" id="tabs"></div>
+    <div class="scroll"><table id="dimTable"></table></div>
+    <p class="hint" id="dimHint"></p>
+  </div>
+
+  <div class="card">
+    <h3>Detalle de órdenes de trabajo <span class="status" id="detCount"></span></h3>
+    <div class="row" style="margin-bottom:8px"><input type="text" id="search" placeholder="Buscar tienda, código TT, OT, merch u observación…" style="max-width:420px">
+      <button class="btn" id="csvBtn">⬇ Exportar CSV</button></div>
+    <div class="scroll"><table id="detTable"></table></div>
+    <p class="hint" id="detHint"></p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script>
+/* ═══ Config: consolidado de Merch (archivo "Crish") en el OneDrive de acastro, vía Microsoft Graph ═══
+   Mismo registro de Entra que el radar (app "bat360"). Falta autorizar el Redirect URI de este sitio (ver README). */
+window.CONS = {
+  clientId: "2dd44541-d3ac-459c-afa0-aa873590f7e0",
+  tenant:   "9d85a34e-57e5-4f82-9341-7dd9300077b7",
+  scopes:   ["Files.Read.All"],
+  driveId:  "b!ftpx1PHMU02Xyd_BvRi5gZ4jKtzFMjZHt1vZTICVWd0sPgcGYMRfTZopqpx_5vTB",
+  itemId:   "015HP6ULNI7DK2HDKMWJE3MICO6AEXORUF",           // Crish (1) (1).xlsx  (se conserva aunque lo muevan/renombren)
+  sheet:    "NUEVO 2222"
+};
+
+(function(){
+"use strict";
+var CFG = window.CONS, $ = function(id){ return document.getElementById(id); };
+var MESES = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,set:8,sep:8,oct:9,nov:10,dic:11};
+var MESN = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Setiembre","Octubre","Noviembre","Diciembre"];
+var YEAR_DEF = new Date().getFullYear();
+var ALL = [], VIEW = [], dimKey = "proyecto", sortCol = null, sortDir = 1, detLimit = 200;
+
+function norm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim().toUpperCase(); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+function pad(n){ return (n<10?"0":"")+n; }
+
+/* Fechas: Date real, serial de Excel o texto "19-feb" (sin año ⇒ año actual). Devuelve {y,m,d} o null */
+function parseDate(v){
+  if(v==null || v==="") return null;
+  if(v instanceof Date && !isNaN(v)) return {y:v.getFullYear(), m:v.getMonth(), d:v.getDate()};
+  if(typeof v==="number" && v>20000 && v<80000){ var d=new Date(Math.round((v-25569)*86400000)); return {y:d.getUTCFullYear(),m:d.getUTCMonth(),d:d.getUTCDate()}; }
+  var s = norm(v).toLowerCase(), m;
+  if((m = s.match(/^(\d{1,2})[-\/ ]([a-z]{3})[a-z]*(?:[-\/ ](\d{2,4}))?$/)) && MESES[m[2]]!=null){
+    var y = m[3] ? (+m[3]<100 ? 2000+ +m[3] : +m[3]) : YEAR_DEF; return {y:y,m:MESES[m[2]],d:+m[1]};
+  }
+  if((m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/))){ var yy=+m[3]<100?2000+ +m[3]:+m[3]; return {y:yy,m:+m[2]-1,d:+m[1]}; }
+  return null;
+}
+var dkey = function(d){ return d ? d.y+"-"+pad(d.m+1) : ""; };
+var dstr = function(d){ return d ? pad(d.d)+"/"+pad(d.m+1)+"/"+d.y : ""; };
+
+function estado(efect, status){
+  var e = norm(efect), s = norm(status);
+  if(e.indexOf("NO EFECT")>=0 || e.indexOf("NO REALIZ")>=0) return "noefectivo";
+  if(e.indexOf("EFECT")>=0 || e==="REALIZADO") return "efectivo";
+  if(s.indexOf("NO EFECT")>=0) return "noefectivo";
+  return "pendiente";
+}
+function statusCls(status){
+  var s = norm(status);
+  if(s.indexOf("VISIT")>=0) return "VISITADO";
+  if(s.indexOf("POR PR")>=0) return "POR PROGRAMAR";
+  if(s.indexOf("PROGRAM")>=0) return "PROGRAMADO";
+  return s || "SIN STATUS";
+}
+function equipoCls(v){ var s=norm(v); return s.indexOf("SQUAD")>=0 ? "SQUAD" : (s.indexOf("SOLO")>=0 ? "SOLO" : (s||"SIN EQUIPO")); }
+var ALIAS = {
+  proyecto:["PROYECTO"], solicitante:["SOLICITANTE"], codigo:["CODIGO TT"], tienda:["TIENDA"], cadena:["CADENA"],
+  statusRaw:["STATUS"], efectRaw:["EFECTIVIDAD"], equipoRaw:["EQUIPO"], merch:["MERCH"], obs:["OBSERVACIONES"], link:["LINK"],
+  ot:["OT"], fRep:["FECHA REPORTADA"], fProg:["FECHA PROGRAMADA"], cig:["CIGARRERA"], cant:["CANT CIG"], distrito:["DISTRITO"]
+};
+
+function parseSheet(ws){
+  var rows = XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false});
+  var hi=-1, map={};
+  for(var i=0;i<Math.min(rows.length,15);i++){
+    var h = rows[i].map(norm);
+    if(h.indexOf("CODIGO TT")>=0 && h.indexOf("FECHA PROGRAMADA")>=0){ hi=i; Object.keys(ALIAS).forEach(function(k){ for(var a=0;a<ALIAS[k].length;a++){ var ix=h.indexOf(ALIAS[k][a]); if(ix>=0){ map[k]=ix; break; } } }); break; }
+  }
+  if(hi<0) throw new Error("No encontré el encabezado (CODIGO TT / FECHA PROGRAMADA) en la hoja.");
+  var out=[];
+  for(var r=hi+1;r<rows.length;r++){
+    var row=rows[r], g=function(k){ return map[k]==null ? "" : row[map[k]]; };
+    if(!String(g("proyecto")).trim() && !String(g("tienda")).trim() && !String(g("codigo")).trim()) continue;
+    var fp=parseDate(g("fProg")), fr=parseDate(g("fRep"));
+    var o = {
+      proyecto:norm(g("proyecto"))||"SIN PROYECTO", solicitante:String(g("solicitante")).trim(), codigo:String(g("codigo")).trim(),
+      tienda:String(g("tienda")).trim(), cadena:String(g("cadena")).trim()||"SIN CADENA",
+      status:statusCls(g("statusRaw")), res:estado(g("efectRaw"),g("statusRaw")), equipo:equipoCls(g("equipoRaw")),
+      merch:String(g("merch")).trim(), obs:String(g("obs")).trim(), link:String(g("link")).trim(), ot:String(g("ot")).trim(),
+      fProg:fp, fRep:fr, cig:String(g("cig")).trim(), cant:+g("cant")||0, distrito:norm(g("distrito"))||"SIN DISTRITO"
+    };
+    o.cigN = (o.cig==="NA"||o.cig==="")?"SIN CIGARRERA":norm(o.cig);
+    o.search = norm([o.tienda,o.codigo,o.ot,o.merch,o.obs,o.proyecto,o.distrito].join(" "));
+    out.push(o);
+  }
+  return out;
+}
+
+/* ═══ Filtros ═══ */
+function fillSelect(id, vals, allLabel, keep){
+  var el=$(id), cur=keep?el.value:""; el.innerHTML='<option value="">'+allLabel+'</option>'+vals.map(function(v){return '<option>'+esc(v)+'</option>';}).join("");
+  if(cur && vals.indexOf(cur)>=0) el.value=cur;
+}
+function uniq(k){ var s={}; ALL.forEach(function(r){ s[r[k]]=1; }); return Object.keys(s).sort(); }
+function buildFilters(){
+  var months={}; ALL.forEach(function(r){ [r.fProg,r.fRep].forEach(function(d){ if(d) months[dkey(d)]=1; }); });
+  var ms=Object.keys(months).sort().reverse();
+  var def=ms.filter(function(m){ return ALL.some(function(r){ return r.fProg && dkey(r.fProg)===m; }); })[0] || ms[0];
+  $("fMes").innerHTML=ms.map(function(m){ var p=m.split("-"); return '<option value="'+m+'">'+MESN[+p[1]-1]+' '+p[0]+'</option>'; }).join("")+'<option value="">Todos los meses</option>';
+  $("fMes").value=def||"";
+  fillSelect("fProyecto",uniq("proyecto"),"Todos"); fillSelect("fCadena",uniq("cadena"),"Todas");
+  fillSelect("fEquipo",uniq("equipo"),"Todos"); fillSelect("fDistrito",uniq("distrito"),"Todos");
+}
+function passOthers(r){
+  var v=function(id){return $(id).value;};
+  return (!v("fProyecto")||r.proyecto===v("fProyecto")) && (!v("fCadena")||r.cadena===v("fCadena")) &&
+         (!v("fEquipo")||r.equipo===v("fEquipo")) && (!v("fDistrito")||r.distrito===v("fDistrito")) && (!v("fRes")||r.res===v("fRes"));
+}
+function inMonth(d){ var m=$("fMes").value; return !m || (d && dkey(d)===m); }
+
+/* ═══ Render ═══ */
+function counts(rows){ var c={t:0,efectivo:0,noefectivo:0,pendiente:0}; rows.forEach(function(r){ c.t++; c[r.res]++; }); return c; }
+function pct(a,b){ return b ? Math.round(a*1000/b)/10+"%" : "–"; }
+function render(){
+  var base=$("fBase").value, other=ALL.filter(passOthers);
+  var progMes=other.filter(function(r){return inMonth(r.fProg);}), repMes=other.filter(function(r){return inMonth(r.fRep);});
+  VIEW = base==="prog" ? progMes : repMes;
+  var c=counts(VIEW), ej=c.efectivo+c.noefectivo;
+  var repSinProg=repMes.filter(function(r){return !r.fProg;}).length;
+  $("kpis").innerHTML=[
+    ["Programadas en el mes",progMes.length,""],["Reportadas en el mes",repMes.length,""],
+    ["Efectivas",c.efectivo,"good"],["No efectivas",c.noefectivo,"bad"],["% efectividad",pct(c.efectivo,ej),""],
+    ["Pendientes",c.pendiente,""],["Reportadas sin programar",repSinProg,""]
+  ].map(function(k){ return '<div class="kpi '+k[2]+'"><b>'+k[1]+'</b><span>'+k[0]+'</span></div>'; }).join("");
+  $("dayBasis").textContent="· contadas por fecha "+(base==="prog"?"programada":"reportada");
+  renderDays(); renderDim(); renderDetail();
+  postH();
+}
+function renderDays(){
+  var base=$("fBase").value, map={}, mes=$("fMes").value;
+  VIEW.forEach(function(r){ var d=base==="prog"?r.fProg:r.fRep; if(!d) return; var k=dkey(d)+"-"+pad(d.d); (map[k]=map[k]||{efectivo:0,noefectivo:0,pendiente:0})[r.res]++; });
+  var keys=Object.keys(map).sort();
+  if(mes){ var p=mes.split("-"), n=new Date(+p[0],+p[1],0).getDate(); keys=[]; for(var i=1;i<=n;i++) keys.push(mes+"-"+pad(i)); }
+  var max=1; keys.forEach(function(k){ var m=map[k]; if(m) max=Math.max(max,m.efectivo+m.noefectivo+m.pendiente); });
+  $("days").innerHTML=keys.map(function(k){ var m=map[k]||{efectivo:0,noefectivo:0,pendiente:0}, t=m.efectivo+m.noefectivo+m.pendiente;
+    var h=function(x){return (x*100/max)+"%";};
+    return '<div class="day" title="'+k.split("-").reverse().join("/")+': '+t+' (efect. '+m.efectivo+' · no efect. '+m.noefectivo+' · pend. '+m.pendiente+')"><i class="p" style="height:'+h(m.pendiente)+'"></i><i class="r" style="height:'+h(m.noefectivo)+'"></i><i class="g" style="height:'+h(m.efectivo)+'"></i></div>'; }).join("");
+  $("dayLbl").innerHTML=keys.map(function(k){ return '<span>'+(+k.slice(-2))+'</span>'; }).join("");
+}
+var DIMS=[["proyecto","Proyecto"],["equipo","Equipo (Squad / Solo)"],["distrito","Distrito"],["cadena","Cadena"],["merch","Merch / dupla"],["cigN","Cigarrera"],["status","Status"],["motivo","Motivos no efectivo"]];
+function buildTabs(){
+  $("tabs").innerHTML=DIMS.map(function(d){ return '<span class="tab'+(d[0]===dimKey?" on":"")+'" data-k="'+d[0]+'">'+d[1]+'</span>'; }).join("");
+  Array.prototype.forEach.call($("tabs").children,function(t){ t.onclick=function(){ dimKey=t.dataset.k; buildTabs(); renderDim(); postH(); }; });
+}
+function renderDim(){
+  var rows=VIEW, key=dimKey, groups={};
+  if(key==="motivo"){
+    rows=VIEW.filter(function(r){return r.res==="noefectivo";});
+    rows.forEach(function(r){ var m=r.obs?norm(r.obs):"SIN OBSERVACIÓN"; (groups[m]=groups[m]||[]).push(r); });
+    $("dimHint").textContent="Motivo = columna OBSERVACIONES de las OT no efectivas del periodo. Por ahora es texto libre; si luego se estandariza, se agrupa mejor.";
+  } else {
+    rows.forEach(function(r){ var m=r[key]||"–"; (groups[m]=groups[m]||[]).push(r); });
+    $("dimHint").textContent=key==="equipo"?"Squad = dupla para OT pesadas (instalación, retiro de cigarrera). Solo = OT que una persona resuelve (placas, dispensers, glorificadores). Se arma según el planning.":"";
+  }
+  var list=Object.keys(groups).map(function(k){ var c=counts(groups[k]); c.k=k; return c; }).sort(function(a,b){return b.t-a.t;});
+  var head=key==="motivo"?'<tr><th>Motivo (observación)</th><th class="n">OT no efectivas</th></tr>':
+    '<tr><th>'+esc((DIMS.filter(function(d){return d[0]===key;})[0]||[])[1])+'</th><th class="n">Total</th><th class="n">Efectivo</th><th class="n">No efectivo</th><th class="n">Pendiente</th><th class="n">% efect.</th><th style="width:140px"></th></tr>';
+  var body=list.map(function(c){
+    if(key==="motivo") return '<tr><td>'+esc(c.k)+'</td><td class="n">'+c.t+'</td></tr>';
+    var ej=c.efectivo+c.noefectivo, w=function(x){return c.t?(x*100/c.t):0;};
+    return '<tr><td>'+esc(c.k)+'</td><td class="n">'+c.t+'</td><td class="n">'+c.efectivo+'</td><td class="n">'+c.noefectivo+'</td><td class="n">'+c.pendiente+'</td><td class="n">'+pct(c.efectivo,ej)+'</td>'+
+      '<td><div class="bar"><i class="g" style="width:'+w(c.efectivo)+'%"></i><i class="r" style="width:'+w(c.noefectivo)+'%"></i><i class="p" style="width:'+w(c.pendiente)+'%"></i></div></td></tr>';
+  }).join("");
+  $("dimTable").innerHTML=head+(body||'<tr><td colspan="7" class="status">Sin datos para estos filtros.</td></tr>');
+}
+var COLS=[["fProg","Programada",function(r){return dstr(r.fProg);}],["fRep","Reportada",function(r){return dstr(r.fRep);}],["proyecto","Proyecto"],["tienda","Tienda"],["cadena","Cadena"],["distrito","Distrito"],["ot","OT"],["equipo","Equipo"],["merch","Merch"],["res","Resultado",function(r){return '<span class="chip '+r.res+'">'+({efectivo:"Efectivo",noefectivo:"No efectivo",pendiente:"Pendiente"}[r.res])+'</span>';}],["obs","Observaciones"],["link","Foto",function(r){return r.link?'<a href="'+esc(r.link)+'" target="_blank" rel="noopener">📷 ver</a>':"";}]];
+function detRows(){
+  var q=norm($("search").value), rows=VIEW.filter(function(r){return !q||r.search.indexOf(q)>=0;});
+  if(sortCol){ var c=sortCol; rows=rows.slice().sort(function(a,b){ var x=a[c],y=b[c]; if(x&&x.y){x=x.y*400+x.m*32+x.d;} if(y&&y.y){y=y.y*400+y.m*32+y.d;} x=x==null?"":x; y=y==null?"":y; return (x>y?1:x<y?-1:0)*sortDir; }); }
+  return rows;
+}
+function renderDetail(){
+  var rows=detRows();
+  $("detCount").textContent="· "+rows.length.toLocaleString("es-PE")+" OT";
+  $("detTable").innerHTML='<tr>'+COLS.map(function(c){return '<th data-c="'+c[0]+'">'+c[1]+(sortCol===c[0]?(sortDir>0?" ▲":" ▼"):"")+'</th>';}).join("")+'</tr>'+
+    rows.slice(0,detLimit).map(function(r){ return '<tr>'+COLS.map(function(c){ return '<td>'+(c[2]?c[2](r):esc(r[c[0]]))+'</td>'; }).join("")+'</tr>'; }).join("");
+  Array.prototype.forEach.call($("detTable").querySelectorAll("th"),function(th){ th.onclick=function(){ var c=th.dataset.c; if(sortCol===c) sortDir=-sortDir; else {sortCol=c;sortDir=1;} renderDetail(); postH(); }; });
+  $("detHint").innerHTML=rows.length>detLimit?'Mostrando '+detLimit+' de '+rows.length+'. <a href="#" id="moreBtn">Mostrar más</a> o afina con la búsqueda/filtros.':"";
+  var mb=$("moreBtn"); if(mb) mb.onclick=function(e){ e.preventDefault(); detLimit+=500; renderDetail(); postH(); };
+}
+$("csvBtn").onclick=function(){
+  var rows=detRows(), head=COLS.map(function(c){return c[1];}), cells=function(r){ return [dstr(r.fProg),dstr(r.fRep),r.proyecto,r.tienda,r.cadena,r.distrito,r.ot,r.equipo,r.merch,r.res,r.obs,r.link]; };
+  var q=function(v){ return '"'+String(v==null?"":v).replace(/"/g,'""')+'"'; };
+  var csv="﻿"+[head].concat(rows.map(cells)).map(function(a){return a.map(q).join(",");}).join("\r\n");
+  var a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download="consolidado_merch.csv"; a.click();
+};
+["fMes","fBase","fProyecto","fCadena","fEquipo","fDistrito","fRes"].forEach(function(id){ $(id).onchange=function(){ detLimit=200; render(); }; });
+$("search").oninput=function(){ detLimit=200; renderDetail(); postH(); };
+
+function onData(rows, label){
+  ALL=rows; $("app").hidden=false; buildFilters(); buildTabs(); render();
+  var st=$("status"); st.className="status ok"; st.textContent="✓ "+rows.length.toLocaleString("es-PE")+" OT · "+label;
+}
+function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
+window.addEventListener("resize",postH);
+
+/* ═══ Carga manual ═══ */
+function parseBuffer(buf){
+  var wb=XLSX.read(buf,{type:"array",cellDates:true,sheets:CFG.sheet});
+  var ws=wb.Sheets[CFG.sheet] || (wb.SheetNames.length===1 ? wb.Sheets[wb.SheetNames[0]] : null);
+  if(!ws) throw new Error('No existe la hoja "'+CFG.sheet+'" en el archivo.');
+  return parseSheet(ws);
+}
+$("fileInput").onchange=function(e){
+  var f=e.target.files[0]; if(!f) return; setSt("Leyendo "+f.name+"…");
+  f.arrayBuffer().then(function(b){ onData(parseBuffer(b), f.name); }).catch(fail);
+};
+function setSt(t,cls){ var s=$("status"); s.textContent=t; s.className="status"+(cls?" "+cls:""); }
+function fail(err){ setSt("⚠ "+((err&&err.message)||err),"err"); }
+
+/* ═══ Conexión en vivo: Microsoft Graph + MSAL ═══ */
+var msalApp=null, busy=false;
+function token(interactive){
+  var req={scopes:CFG.scopes}, acc=msalApp.getAllAccounts()[0];
+  if(acc){ req.account=acc; return msalApp.acquireTokenSilent(req).then(function(r){return r.accessToken;}).catch(function(){
+    if(!interactive) return Promise.reject(new Error("silent-failed")); return msalApp.acquireTokenPopup(req).then(function(r){return r.accessToken;}); }); }
+  if(!interactive) return Promise.reject(new Error("no-account"));
+  return msalApp.loginPopup(req).then(function(r){ $("msUser").textContent=r.account.username; return r.accessToken; });
+}
+function loadLive(silent){
+  if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y descargando el consolidado (≈15 MB, puede tardar)…");
+  token(!silent).then(function(t){
+    return fetch("https://graph.microsoft.com/v1.0/drives/"+CFG.driveId+"/items/"+CFG.itemId+"/content",{headers:{Authorization:"Bearer "+t}});
+  }).then(function(res){ if(!res.ok) throw new Error("Graph HTTP "+res.status); setSt("Procesando hoja "+CFG.sheet+"…"); return res.arrayBuffer(); })
+  .then(function(buf){ onData(parseBuffer(buf),"SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false; })
+  .catch(function(err){
+    var m=(err&&err.message)||String(err);
+    if(silent && (m==="no-account"||m==="silent-failed")) return;
+    if(m.indexOf("403")>=0) setSt("⚠ Iniciaste sesión pero tu cuenta no tiene acceso al archivo (403). Pide a acastro que te comparta la carpeta MASSIEL/BAT/BORRADOR/PLAN, o usa la carga manual.","err");
+    else if(m.indexOf("404")>=0) setSt("⚠ No se encontró el archivo (404): lo movieron o borraron. Usa la carga manual y avísame para actualizar la ruta.","err");
+    else if(m.indexOf("interaction_in_progress")>=0) setSt("⚠ Hay un inicio de sesión en curso. Recarga (F5) y completa el login sin cerrar la ventana.","err");
+    else if(m.indexOf("popup")>=0) setSt("⚠ El navegador bloqueó la ventana de inicio de sesión: permite ventanas emergentes para este sitio.","err");
+    else fail(err);
+  }).finally(function(){ busy=false; });
+}
+function initMs(){
+  if(typeof msal==="undefined"){ $("msConnect").hidden=true; return; }
+  msalApp=new msal.PublicClientApplication({auth:{clientId:CFG.clientId,authority:"https://login.microsoftonline.com/"+CFG.tenant,redirectUri:location.origin+location.pathname},cache:{cacheLocation:"localStorage"}});
+  msalApp.initialize().then(function(){return msalApp.handleRedirectPromise();}).then(function(resp){
+    if(resp&&resp.account) msalApp.setActiveAccount(resp.account);
+    var acc=msalApp.getActiveAccount()||msalApp.getAllAccounts()[0];
+    if(acc){ msalApp.setActiveAccount(acc); $("msUser").textContent=acc.username; loadLive(true); }
+  }).catch(function(e){ console.warn("MSAL init:",e&&e.message); });
+  $("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
+}
+
+/* ═══ Datos de ejemplo (filas reales de muestra del consolidado, solo para ver la vista) ═══ */
+$("sampleBtn").onclick=function(){
+  var S=[
+    ["CAMBIOS DE CIGARRERA","EQUIPO PROMOTORÍA","TAMBO - ANCON2","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SQUAD","SERGIO + LUCAS","","CAMBIO DE CIGARRERA","19-feb","18-may","ANCON","CIG AEREA PIXEL 3.0 MD12 TRANSFORMADA"],
+    ["MANTENIMIENTOS KKAA","EQUIPO PROMOTORÍA","TAMBO - ANCON2","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SOLO","JEAN MARCO","","CAMBIO DE BRAZO HIDRÁULICO","26-ene","05-mar","ANCON",""],
+    ["ATERRAMIENTO","TT AUDIT","TAMBO - ANCON","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SQUAD","JOSE","","ATERRAMIENTO","27-ago","28-sep","ANCON",""],
+    ["CONQUISTA","ANA SOFIA BERNEDO","PILLCO HUALLPA CRISTINA","BODEGAS","PROGRAMADO","PROGRAMADO","SQUAD","RODRIGO + JEAN FRANCO","REVISAR MANUAL","INSTALACION 1 PIXEL 3.1","25-sep","09-nov","VILLA MARIA DEL TRIUNFO",""],
+    ["CONQUISTA","GIANCARLOS","SUAREZ SUAREZ ALAN PAUL","BODEGAS","POR PROGRAMAR","POR PROGRAMAR","SQUAD","","","INSTALAR 1 PIXEL 3.1","05-oct","","CHILCA",""],
+    ["BODEGAS","RICHARD CACERES","Espinoza vicente jesus","BODEGAS","PROGRAMADO","PROGRAMADO","SQUAD","SR JULIO + JORGE","","INSTALAR 1 PIXEL 3.1","27-oct","10-nov","CAÑETE",""],
+    ["MANTENIMIENTO KKAA","VENDEDOR","ZARATE CASTILLO MARILYN","BODEGAS","VISITADO","NO EFECTIVO","SOLO","RENATO","LOCAL CERRADO","INSTALAR D. MODULAR","04-nov","06-nov","CALLAO",""],
+    ["MANTENIMIENTO KKAA","SEBASTIAN OVIEDO","Ola y Sur","BODEGAS","VISITADO","EFECTIVO","SQUAD","SERGIO + JOSE","","MANTENIMIENTO CIGARRERA","13-oct","06-nov","PUNTA HERMOSA","PIXEL 3.0 MD 12"],
+    ["REVISITA PLACAS MULTICATEGORIA","TT AUDIT","PLUSMARKET","BODEGAS","VISITADO","NO EFECTIVO","SOLO","JOSUE","PUNTO CERRADO / POS NO PERMITIÓ","COLOCAR PLACA MULTICATEGORIA","06-oct","05-nov","JESUS MARÍA","STAR PIANO"],
+    ["CAMBIOS DE CIGARRERA","EQUIPO PROMOTORÍA","TAMBO - LINCE","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SQUAD","JOSE + LUCAS","","CAMBIO DE CIGARRERA","12-oct","05-nov","LINCE","STAR MASSI 2.0"]
+  ];
+  var rows=S.map(function(s){ var o={proyecto:norm(s[0]),solicitante:s[1],codigo:"",tienda:s[2],cadena:s[3],status:statusCls(s[4]),res:estado(s[5],s[4]),equipo:equipoCls(s[6]),merch:s[7],obs:s[8],link:"",ot:s[9],fRep:parseDate(s[10]),fProg:parseDate(s[11]),cig:s[13]||"NA",cant:1,distrito:norm(s[12])};
+    o.cigN=(o.cig==="NA"||o.cig==="")?"SIN CIGARRERA":norm(o.cig); o.search=norm([o.tienda,o.ot,o.merch,o.obs,o.proyecto,o.distrito].join(" ")); return o; });
+  onData(rows,"DATOS DE EJEMPLO (no son el consolidado real)");
+};
+
+initMs(); postH();
+})();
+</script>
+</body>
+</html>
