@@ -8,7 +8,8 @@ window.SITE = {
   googleClientId: '382427877987-j68n1tmm6ers3biekqamem2jlrdguubj.apps.googleusercontent.com',
   usuarios: {
     'ccamarena@ttaudit.com': { vistas: ['*'] },
-    'mcarhuallanqui@ttaudit.com': { vistas: ['*'] }
+    'mcarhuallanqui@ttaudit.com': { vistas: ['*'] },
+    'acastro@ttaudit.com': { vistas: ['*'] }
   },
   vistas: [
     { id: 'consolidado', seccion: 'Merch', icono: '📋', titulo: 'Consolidado',
