@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proyectos · BAT 360 Merch</title>
+<style>
+  :root{ --bg:#ffffff; --txt:#1b2a47; --muted:#6c7a92; --line:#dde4ee; --brand:#1d3b78; --soft:#f2f5fa;
+         --good:#1f9d57; --bad:#d6453d; --warn:#e0a100; --pend:#b8c2d6; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#1F2224; --txt:#EDEBE5; --muted:#9C9A92; --line:#33363A; --brand:#7FB4D4; --soft:#26292B; --good:#4cc283; --bad:#ef7a73; --warn:#f0c040; --pend:#5a6272; } }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
+  h3{font-size:14px;margin:0 0 8px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{background:var(--soft);border:1px solid var(--line);color:var(--txt);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600}
+  .btn:hover{background:var(--line)} .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)} .btn[hidden]{display:none}
+  .status{font-size:12.5px;color:var(--muted)} .status.ok{color:var(--good)} .status.err{color:var(--bad)}
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px}
+  .filters label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+  select,input[type=text]{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--txt);font-size:13px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:10px;margin:0 0 16px}
+  .kpi{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .kpi b{display:block;font-size:24px;line-height:1.15} .kpi span{font-size:11.5px;color:var(--muted)}
+  .kpi.good b{color:var(--good)} .kpi.bad b{color:var(--bad)}
+  .card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+  .bar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:var(--line)}
+  .bar i{display:block;height:100%} .bar .g{background:var(--good)} .bar .r{background:var(--bad)} .bar .p{background:var(--pend)}
+  .projs{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:16px}
+  .proj{background:var(--soft);border:2px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:var(--txt);font:inherit}
+  .proj:hover{border-color:var(--muted)} .proj.on{border-color:var(--brand);background:var(--bg)}
+  .proj b{display:block;font-size:12.5px;margin-bottom:2px} .proj small{display:block;color:var(--muted);font-size:11.5px;margin:4px 0 6px}
+  .proj .pc{float:right;font-weight:700;font-size:13px}
+  .chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .chip.efectivo{background:rgba(31,157,87,.15);color:var(--good)} .chip.noefectivo{background:rgba(214,69,61,.15);color:var(--bad)} .chip.pendiente{background:rgba(120,130,150,.18);color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);white-space:nowrap}
+  td.n,th.n{text-align:right;white-space:nowrap}
+  .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .ph{background:var(--bg);border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;display:flex;flex-direction:column}
+  .ph:hover{border-color:var(--brand)}
+  .ph .im{aspect-ratio:4/3;background:var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:26px;overflow:hidden}
+  .ph .im img{width:100%;height:100%;object-fit:cover;display:block}
+  .ph .tx{padding:6px 8px;font-size:11.5px;line-height:1.35} .ph .tx b{display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ph .tx span{color:var(--muted)}
+  .hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
+  .chk{display:flex;align-items:center;gap:6px;font-size:12.5px;margin-top:20px} .chk input{width:auto}
+  #lb{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  #lb.on{display:flex}
+  #lbBox{background:var(--bg);border-radius:12px;max-width:920px;width:100%;max-height:94vh;overflow:auto;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+  #lbBox .big{background:#111;display:flex;align-items:center;justify-content:center;min-height:260px} #lbBox .big img{max-width:100%;max-height:88vh;display:block}
+  #lbBox .inf{padding:16px;font-size:13px} #lbBox .inf h3{font-size:15px} #lbBox .inf p{margin:5px 0}
+  #lbBox .inf .k{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;display:block}
+  @media(max-width:700px){#lbBox{grid-template-columns:1fr}}
+  a{color:var(--brand)}
+</style>
+</head>
+<body>
+
+<div class="row">
+  <button class="btn primary" id="msConnect">🔐 Conectar con SharePoint (en vivo)</button>
+  <button class="btn" id="msRefresh" hidden>🔄 Actualizar</button>
+  <label class="btn" style="margin:0">📂 Cargar Excel manual<input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" hidden></label>
+  <span class="status" id="status">Sin datos todavía. Conecta con SharePoint para leer el consolidado (hoja NUEVO 2222).</span>
+  <span class="status" id="msUser"></span>
+</div>
+
+<div id="app" hidden>
+  <h3 style="margin-top:16px">Campañas <span class="status" id="projHint"></span></h3>
+  <div class="projs" id="projs"></div>
+
+  <div class="filters">
+    <div><label>Proyecto</label><select id="fProyecto"></select></div>
+    <div><label>Cadena</label><select id="fCadena"></select></div>
+    <div><label>Distrito</label><select id="fDistrito"></select></div>
+    <div><label>Resultado</label><select id="fRes"><option value="">Todos</option><option value="efectivo">Efectivo</option><option value="noefectivo">No efectivo</option><option value="pendiente">Pendiente</option></select></div>
+    <div><label>Buscar</label><input type="text" id="search" placeholder="Tienda, código TT, OT, merch…"></div>
+    <label class="chk"><input type="checkbox" id="fFoto" checked> Solo con foto</label>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>Avance por mes <span class="status">· por fecha programada</span></h3>
+    <div style="overflow-x:auto"><table id="monthTable"></table></div>
+  </div>
+
+  <div class="card">
+    <h3>Fotos de la campaña <span class="status" id="galCount"></span></h3>
+    <div class="gal" id="gal"></div>
+    <p class="hint" id="galHint"></p>
+  </div>
+</div>
+
+<div id="lb"><div id="lbBox"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script>
+/* ═══ Config: misma fuente que Consolidado (hoja NUEVO 2222 del archivo "Crish") ═══ */
+window.CONS = {
+  clientId: "2dd44541-d3ac-459c-afa0-aa873590f7e0",
+  tenant:   "9d85a34e-57e5-4f82-9341-7dd9300077b7",
+  scopes:   ["Files.Read.All"],
+  driveId:  "b!ftpx1PHMU02Xyd_BvRi5gZ4jKtzFMjZHt1vZTICVWd0sPgcGYMRfTZopqpx_5vTB",
+  itemId:   "015HP6ULNI7DK2HDKMWJE3MICO6AEXORUF",
+  sheet:    "NUEVO 2222",
+  year:     2026,
+  /* HW y Proyecto Interno tienen sus propias vistas: se excluyen aquí. Se compara contra el nombre del PROYECTO (sin tildes, mayúsculas). */
+  excluir:  [/\bHW\d*\b/, /HARDWARE/, /INTERNO/],
+  /* Nombres escritos distinto en el consolidado → una sola campaña. */
+  alias:    [[/^MANTENIMIENTOS? KKAA?$/, "MANTENIMIENTOS KKAA"]],
+  pageSize: 48
+};
+
+(function(){
+"use strict";
+var CFG = window.CONS, $ = function(id){ return document.getElementById(id); };
+var MESES = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,set:8,sep:8,oct:9,nov:10,dic:11};
+var MESN = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Set","Oct","Nov","Dic"];
+var YEAR_DEF = +CFG.year || new Date().getFullYear();
+var ALL = [], VIEW = [], PHOTOS = [], shown = 0, selProj = "";
+
+function norm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim().toUpperCase(); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+function pad(n){ return (n<10?"0":"")+n; }
+function safeUrl(u){ u=String(u==null?"":u).trim(); return /^https?:\/\//i.test(u) ? u : ""; }
+function isImg(u){ return /\.(jpe?g|png|webp|gif)(\?|#|$)/i.test(u) || /^https:\/\/storage\.googleapis\.com\/ttaudit_medias\//i.test(u); }
+
+function parseDate(v){
+  if(v==null || v==="") return null;
+  if(v instanceof Date && !isNaN(v)) return {y:v.getFullYear(), m:v.getMonth(), d:v.getDate()};
+  if(typeof v==="number" && v>20000 && v<80000){ var d=new Date(Math.round((v-25569)*86400000)); return {y:d.getUTCFullYear(),m:d.getUTCMonth(),d:d.getUTCDate()}; }
+  var s = norm(v).toLowerCase(), m;
+  if((m = s.match(/^(\d{1,2})[-\/ ]([a-z]{3})[a-z]*(?:[-\/ ](\d{2,4}))?$/)) && MESES[m[2]]!=null){
+    var y = m[3] ? (+m[3]<100 ? 2000+ +m[3] : +m[3]) : YEAR_DEF; return {y:y,m:MESES[m[2]],d:+m[1],ny:!m[3]};
+  }
+  if((m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/))){ var yy=+m[3]<100?2000+ +m[3]:+m[3]; return {y:yy,m:+m[2]-1,d:+m[1]}; }
+  return null;
+}
+var dkey = function(d){ return d ? d.y+"-"+pad(d.m+1) : ""; };
+var dstr = function(d){ return d ? pad(d.d)+"/"+pad(d.m+1)+"/"+d.y : ""; };
+var dnum = function(d){ return d ? d.y*400+d.m*32+d.d : 0; };
+
+function estado(efect, status){
+  var e = norm(efect), s = norm(status);
+  if(e.indexOf("NO EFECT")>=0 || e.indexOf("NO REALIZ")>=0) return "noefectivo";
+  if(e.indexOf("EFECT")>=0 || e==="REALIZADO") return "efectivo";
+  if(s.indexOf("NO EFECT")>=0) return "noefectivo";
+  return "pendiente";
+}
+function proyName(raw){
+  var p = norm(raw) || "SIN PROYECTO";
+  for(var i=0;i<CFG.alias.length;i++) if(CFG.alias[i][0].test(p)) return CFG.alias[i][1];
+  return p;
+}
+function excluido(p){ return CFG.excluir.some(function(re){ return re.test(p); }); }
+var ALIAS = { proyecto:["PROYECTO"], codigo:["CODIGO TT"], tienda:["TIENDA"], cadena:["CADENA"], statusRaw:["STATUS"], efectRaw:["EFECTIVIDAD"],
+  merch:["MERCH"], obs:["OBSERVACIONES"], link:["LINK"], ot:["OT"], fProg:["FECHA PROGRAMADA"], fRep:["FECHA REPORTADA"], distrito:["DISTRITO"] };
+
+function parseSheet(ws){
+  var rows = XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false});
+  var hi=-1, map={};
+  for(var i=0;i<Math.min(rows.length,15);i++){
+    var h = rows[i].map(norm);
+    if(h.indexOf("CODIGO TT")>=0 && h.indexOf("FECHA PROGRAMADA")>=0){ hi=i; Object.keys(ALIAS).forEach(function(k){ var ix=h.indexOf(ALIAS[k][0]); if(ix>=0) map[k]=ix; }); break; }
+  }
+  if(hi<0) throw new Error("No encontré el encabezado (CODIGO TT / FECHA PROGRAMADA) en la hoja.");
+  var out=[];
+  for(var r=hi+1;r<rows.length;r++){
+    var row=rows[r], g=function(k){ return map[k]==null ? "" : row[map[k]]; };
+    if(!String(g("proyecto")).trim() && !String(g("tienda")).trim() && !String(g("codigo")).trim()) continue;
+    var p = proyName(g("proyecto")); if(excluido(p)) continue;
+    var fp=parseDate(g("fProg")), fr=parseDate(g("fRep"));
+    if(fp && fr && fr.ny && (fr.y*12+fr.m)-(fp.y*12+fp.m) > 6) fr = {y:fr.y-1, m:fr.m, d:fr.d, ny:true};
+    var o = { proyecto:p, codigo:String(g("codigo")).trim(), tienda:String(g("tienda")).trim(), cadena:String(g("cadena")).trim()||"SIN CADENA",
+      res:estado(g("efectRaw"),g("statusRaw")), merch:String(g("merch")).trim(), obs:String(g("obs")).trim(), link:safeUrl(g("link")), ot:String(g("ot")).trim(),
+      fProg:fp, fRep:fr, distrito:norm(g("distrito"))||"SIN DISTRITO" };
+    o.search = norm([o.tienda,o.codigo,o.ot,o.merch,o.obs,o.distrito].join(" "));
+    out.push(o);
+  }
+  return out;
+}
+
+function counts(rows){ var c={t:0,efectivo:0,noefectivo:0,pendiente:0,foto:0}; rows.forEach(function(r){ c.t++; c[r.res]++; if(r.link) c.foto++; }); return c; }
+function pct(a,b){ return b ? Math.round(a*1000/b)/10+"%" : "–"; }
+function pnum(a,b){ return b ? Math.round(a*100/b) : 0; }
+var RESL = {efectivo:"Efectivo",noefectivo:"No efectivo",pendiente:"Pendiente"};
+
+/* ═══ Filtros ═══ */
+function fillSelect(id, vals, allLabel){ var el=$(id), cur=el.value; el.innerHTML='<option value="">'+allLabel+'</option>'+vals.map(function(v){return '<option>'+esc(v)+'</option>';}).join(""); if(cur&&vals.indexOf(cur)>=0) el.value=cur; }
+function uniq(rows,k){ var s={}; rows.forEach(function(r){ s[r[k]]=1; }); return Object.keys(s).sort(); }
+function buildFilters(){
+  fillSelect("fProyecto",uniq(ALL,"proyecto"),"Todos");
+  fillSelect("fCadena",uniq(ALL,"cadena"),"Todas"); fillSelect("fDistrito",uniq(ALL,"distrito"),"Todos");
+}
+function passOthers(r){
+  var v=function(id){return $(id).value;}, q=norm($("search").value);
+  return (!v("fCadena")||r.cadena===v("fCadena")) && (!v("fDistrito")||r.distrito===v("fDistrito")) && (!v("fRes")||r.res===v("fRes")) && (!q||r.search.indexOf(q)>=0);
+}
+
+/* ═══ Render ═══ */
+function render(){
+  selProj = $("fProyecto").value;
+  var base = ALL.filter(passOthers);
+  renderProjs(base);
+  VIEW = base.filter(function(r){ return !selProj || r.proyecto===selProj; });
+  var c=counts(VIEW), ej=c.efectivo+c.noefectivo;
+  $("kpis").innerHTML=[
+    ["OT de la campaña",c.t,""],["Ejecutadas",ej,""],["Avance",pct(ej,c.t),""],["Efectivas",c.efectivo,"good"],["No efectivas",c.noefectivo,"bad"],
+    ["% efectividad",pct(c.efectivo,ej),""],["Pendientes",c.pendiente,""],["Con foto",c.foto,""]
+  ].map(function(k){ return '<div class="kpi '+k[2]+'"><b>'+k[1]+'</b><span>'+k[0]+'</span></div>'; }).join("");
+  renderMonths(); renderGallery(true); postH();
+}
+function renderProjs(rows){
+  var g={}; rows.forEach(function(r){ (g[r.proyecto]=g[r.proyecto]||[]).push(r); });
+  var list=Object.keys(g).map(function(k){ var c=counts(g[k]); c.k=k; return c; }).sort(function(a,b){return b.t-a.t;});
+  var tot=counts(rows);
+  var card=function(k,c,label){ var ej=c.efectivo+c.noefectivo, w=function(x){return c.t?x*100/c.t:0;};
+    return '<button class="proj'+(selProj===k?" on":"")+'" data-k="'+esc(k)+'"><b><span class="pc">'+pnum(ej,c.t)+'%</span>'+esc(label)+'</b>'+
+      '<div class="bar"><i class="g" style="width:'+w(c.efectivo)+'%"></i><i class="r" style="width:'+w(c.noefectivo)+'%"></i><i class="p" style="width:'+w(c.pendiente)+'%"></i></div>'+
+      '<small>'+ej+' de '+c.t+' OT ejecutadas · '+c.foto+' 📷</small></button>'; };
+  $("projs").innerHTML=card("",tot,"TODAS LAS CAMPAÑAS")+list.map(function(c){ return card(c.k,c,c.k); }).join("");
+  $("projHint").textContent="· "+list.length+" campañas · barra: verde efectivo, rojo no efectivo, gris pendiente";
+  Array.prototype.forEach.call($("projs").children,function(b){ b.onclick=function(){ $("fProyecto").value=b.dataset.k; render(); }; });
+}
+function renderMonths(){
+  var g={}, sin={efectivo:0,noefectivo:0,pendiente:0,t:0};
+  VIEW.forEach(function(r){ var k=r.fProg?dkey(r.fProg):"-"; (g[k]=g[k]||[]).push(r); });
+  var keys=Object.keys(g).sort();
+  $("monthTable").innerHTML='<tr><th>Mes</th><th class="n">OT</th><th class="n">Efectivo</th><th class="n">No efectivo</th><th class="n">Pendiente</th><th class="n">% ejecutado</th><th style="width:160px"></th></tr>'+
+    keys.map(function(k){ var c=counts(g[k]), ej=c.efectivo+c.noefectivo, w=function(x){return c.t?x*100/c.t:0;}, p=k.split("-");
+      return '<tr><td>'+(k==="-"?"Sin fecha programada":MESN[+p[1]-1]+" "+p[0])+'</td><td class="n">'+c.t+'</td><td class="n">'+c.efectivo+'</td><td class="n">'+c.noefectivo+'</td><td class="n">'+c.pendiente+'</td><td class="n">'+pct(ej,c.t)+
+      '</td><td><div class="bar"><i class="g" style="width:'+w(c.efectivo)+'%"></i><i class="r" style="width:'+w(c.noefectivo)+'%"></i><i class="p" style="width:'+w(c.pendiente)+'%"></i></div></td></tr>'; }).join("")
+    || '<tr><td class="status">Sin datos.</td></tr>';
+}
+
+/* ═══ Galería ═══ */
+function renderGallery(reset){
+  if(reset){
+    PHOTOS = VIEW.filter(function(r){ return !$("fFoto").checked || r.link; }).sort(function(a,b){ return (dnum(b.fProg)||dnum(b.fRep)) - (dnum(a.fProg)||dnum(a.fRep)); });
+    shown = 0; $("gal").innerHTML="";
+  }
+  var next = PHOTOS.slice(shown, shown+CFG.pageSize);
+  $("gal").insertAdjacentHTML("beforeend", next.map(function(r,i){
+    var idx=shown+i, im = r.link && isImg(r.link) ? '<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(r.link)+'" alt="" onerror="this.replaceWith(document.createTextNode(\'📷\'))">' : (r.link?'📷':'🚫');
+    return '<div class="ph" data-i="'+idx+'"><div class="im">'+im+'</div><div class="tx"><b title="'+esc(r.tienda)+'">'+esc(r.tienda||"(sin tienda)")+'</b>'+
+      '<span>'+esc(r.proyecto)+'</span><br><span>'+esc(dstr(r.fProg||r.fRep))+' · </span><span class="chip '+r.res+'">'+RESL[r.res]+'</span></div></div>'; }).join(""));
+  shown += next.length;
+  $("galCount").textContent="· "+PHOTOS.length.toLocaleString("es-PE")+" registros";
+  $("galHint").innerHTML = shown<PHOTOS.length ? 'Mostrando '+shown+' de '+PHOTOS.length+'. <a href="#" id="moreBtn">Mostrar más</a>' : (PHOTOS.length?"":"No hay registros con foto para estos filtros.");
+  var mb=$("moreBtn"); if(mb) mb.onclick=function(e){ e.preventDefault(); renderGallery(false); postH(); };
+  postH();
+}
+$("gal").onclick=function(e){ var t=e.target.closest(".ph"); if(t) openLb(PHOTOS[+t.dataset.i]); };
+function openLb(r){
+  if(!r) return;
+  var big = r.link && isImg(r.link) ? '<img referrerpolicy="no-referrer" src="'+esc(r.link)+'" alt="">' : '<span style="color:#aaa">Sin vista previa'+(r.link?' · <a style="color:#9cf" target="_blank" rel="noopener noreferrer" href="'+esc(r.link)+'">abrir enlace</a>':"")+'</span>';
+  var f=function(k,v){ return v?'<p><span class="k">'+k+'</span>'+esc(v)+'</p>':""; };
+  $("lbBox").innerHTML='<div class="big">'+big+'</div><div class="inf"><h3>'+esc(r.tienda||"(sin tienda)")+'</h3><p><span class="chip '+r.res+'">'+RESL[r.res]+'</span></p>'+
+    f("Proyecto",r.proyecto)+f("Cadena",r.cadena)+f("Distrito",r.distrito)+f("Código TT",r.codigo)+f("OT",r.ot)+f("Programada",dstr(r.fProg))+f("Reportada",dstr(r.fRep))+f("Merch",r.merch)+f("Observaciones",r.obs)+
+    (r.link?'<p><a target="_blank" rel="noopener noreferrer" href="'+esc(r.link)+'">Abrir foto original ↗</a></p>':"")+'</div>';
+  $("lb").classList.add("on");
+}
+$("lb").onclick=function(e){ if(e.target===$("lb")) $("lb").classList.remove("on"); };
+document.addEventListener("keydown",function(e){ if(e.key==="Escape") $("lb").classList.remove("on"); });
+
+["fProyecto","fCadena","fDistrito","fRes","fFoto"].forEach(function(id){ $(id).onchange=render; });
+$("search").oninput=render;
+
+function onData(rows, label){
+  ALL=rows; $("app").hidden=false; buildFilters(); render();
+  var st=$("status"); st.className="status ok"; st.textContent="✓ "+rows.length.toLocaleString("es-PE")+" OT · "+label;
+}
+function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
+window.addEventListener("resize",postH);
+
+/* ═══ Carga manual ═══ */
+function parseBuffer(buf){
+  var wb=XLSX.read(buf,{type:"array",cellDates:true,sheets:CFG.sheet});
+  var ws=wb.Sheets[CFG.sheet] || (wb.SheetNames.length===1 ? wb.Sheets[wb.SheetNames[0]] : null);
+  if(!ws) throw new Error('No existe la hoja "'+CFG.sheet+'" en el archivo.');
+  return parseSheet(ws);
+}
+$("fileInput").onchange=function(e){ var f=e.target.files[0]; if(!f) return; setSt("Leyendo "+f.name+"…"); f.arrayBuffer().then(function(b){ onData(parseBuffer(b), f.name); }).catch(fail); };
+function setSt(t,cls){ var s=$("status"); s.textContent=t; s.className="status"+(cls?" "+cls:""); }
+function fail(err){ setSt("⚠ "+((err&&err.message)||err),"err"); }
+
+/* ═══ Conexión en vivo: Microsoft Graph + MSAL ═══ */
+var msalApp=null, busy=false;
+function token(interactive){
+  var req={scopes:CFG.scopes}, acc=msalApp.getAllAccounts()[0];
+  if(acc){ req.account=acc; return msalApp.acquireTokenSilent(req).then(function(r){return r.accessToken;}).catch(function(){
+    if(!interactive) return Promise.reject(new Error("silent-failed")); return msalApp.acquireTokenPopup(req).then(function(r){return r.accessToken;}); }); }
+  if(!interactive) return Promise.reject(new Error("no-account"));
+  return msalApp.loginPopup(req).then(function(r){ $("msUser").textContent=r.account.username; return r.accessToken; });
+}
+function loadLive(silent){
+  if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y descargando el consolidado (≈15 MB, puede tardar)…");
+  token(!silent).then(function(t){
+    return fetch("https://graph.microsoft.com/v1.0/drives/"+CFG.driveId+"/items/"+CFG.itemId+"/content",{headers:{Authorization:"Bearer "+t}});
+  }).then(function(res){ if(!res.ok) throw new Error("Graph HTTP "+res.status); setSt("Procesando hoja "+CFG.sheet+"…"); return res.arrayBuffer(); })
+  .then(function(buf){ onData(parseBuffer(buf),"SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false; })
+  .catch(function(err){
+    var m=(err&&err.message)||String(err);
+    if(silent && (m==="no-account"||m==="silent-failed")) return;
+    if(m.indexOf("403")>=0) setSt("⚠ Tu cuenta no tiene acceso al archivo (403). Pide a acastro que te comparta la carpeta MASSIEL/BAT/BORRADOR/PLAN, o usa la carga manual.","err");
+    else if(m.indexOf("404")>=0) setSt("⚠ No se encontró el archivo (404): lo movieron o borraron. Usa la carga manual.","err");
+    else if(m.indexOf("interaction_in_progress")>=0) setSt("⚠ Hay un inicio de sesión en curso. Recarga (F5) y completa el login.","err");
+    else if(m.indexOf("popup")>=0) setSt("⚠ El navegador bloqueó la ventana de inicio de sesión: permite ventanas emergentes para este sitio.","err");
+    else fail(err);
+  }).finally(function(){ busy=false; });
+}
+function initMs(){
+  if(typeof msal==="undefined"){ $("msConnect").hidden=true; return; }
+  msalApp=new msal.PublicClientApplication({auth:{clientId:CFG.clientId,authority:"https://login.microsoftonline.com/"+CFG.tenant,redirectUri:location.origin+location.pathname},cache:{cacheLocation:"localStorage"}});
+  msalApp.initialize().then(function(){return msalApp.handleRedirectPromise();}).then(function(resp){
+    if(resp&&resp.account) msalApp.setActiveAccount(resp.account);
+    var acc=msalApp.getActiveAccount()||msalApp.getAllAccounts()[0];
+    if(acc){ msalApp.setActiveAccount(acc); $("msUser").textContent=acc.username; loadLive(true); }
+  }).catch(function(e){ console.warn("MSAL init:",e&&e.message); });
+  $("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
+}
+initMs(); postH();
+})();
+</script>
+</body>
+</html>
