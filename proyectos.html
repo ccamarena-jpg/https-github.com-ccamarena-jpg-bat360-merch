@@ -70,12 +70,16 @@
   <div class="projs" id="projs"></div>
 
   <div class="filters">
+    <div><label>Mes</label><select id="fMes"></select></div>
+    <div><label>Desde</label><input type="date" id="fDesde"></div>
+    <div><label>Hasta</label><input type="date" id="fHasta"></div>
     <div><label>Proyecto</label><select id="fProyecto"></select></div>
     <div><label>Cadena</label><select id="fCadena"></select></div>
     <div><label>Distrito</label><select id="fDistrito"></select></div>
     <div><label>Resultado</label><select id="fRes"><option value="">Todos</option><option value="efectivo">Efectivo</option><option value="noefectivo">No efectivo</option><option value="visitado">Visitado (sin efectividad)</option><option value="pendiente">Pendiente</option></select></div>
     <div><label>Buscar</label><input type="text" id="search" placeholder="Tienda, código TT, OT, merch…"></div>
     <label class="chk"><input type="checkbox" id="fFoto" checked> Solo con foto</label>
+    <label class="chk"><input type="checkbox" id="fSin" checked> Incluir pendientes sin fecha</label>
   </div>
 
   <div class="kpis" id="kpis"></div>
@@ -175,6 +179,8 @@ function findCols(h){
   Object.keys(COLS).forEach(function(k){ for(var a=0;a<COLS[k].length;a++){ var ix=h.indexOf(COLS[k][a]); if(ix>=0){ map[k]=ix; break; } } });
   for(var p=0;p<DATE_PREF.length && map.fecha==null;p++) for(var i=0;i<h.length;i++) if(h[i].indexOf("FECHA")===0 && h[i].indexOf(DATE_PREF[p])>=0){ map.fecha=i; break; }
   if(map.fecha==null) for(var j=0;j<h.length;j++) if(h[j].indexOf("FECHA")===0){ map.fecha=j; break; }
+  /* Foto: cualquier columna "LINK …" (p. ej. "LINK IMPLEMENTACION" en Plan Mass), menos la de comodatos */
+  if(map.link==null) for(var k=0;k<h.length;k++) if(h[k].indexOf("LINK")===0 && h[k].indexOf("COMODATO")<0){ map.link=k; break; }
   return map;
 }
 function parseSheet(ws, proyecto){
@@ -220,13 +226,26 @@ function barHtml(c){ var w=function(x){return c.t?x*100/c.t:0;}; return '<div cl
 function fillSelect(id, vals, allLabel){ var el=$(id), cur=el.value; el.innerHTML='<option value="">'+allLabel+'</option>'+vals.map(function(v){return '<option>'+esc(v)+'</option>';}).join(""); if(cur&&vals.indexOf(cur)>=0) el.value=cur; }
 function uniq(rows,k){ var s={}; rows.forEach(function(r){ s[r[k]]=1; }); return Object.keys(s).sort(); }
 function buildFilters(){
+  var ms={}; ALL.forEach(function(r){ if(r.fProg) ms[dkey(r.fProg)]=1; });
+  var keys=Object.keys(ms).sort().reverse(), prev=$("fMes").value, first=!$("fMes").options.length;
+  $("fMes").innerHTML=keys.map(function(m){ var p=m.split("-"); return '<option value="'+m+'">'+MESN[+p[1]-1]+" "+p[0]+'</option>'; }).join("")+'<option value="">Todos los meses</option>';
+  /* por defecto el mes más reciente con datos; al actualizar se respeta lo que el usuario eligió */
+  $("fMes").value = first ? (keys[0]||"") : (prev===""||keys.indexOf(prev)>=0 ? prev : (keys[0]||""));
   var names={}; ALL.forEach(function(r){ names[r.proyecto]=1; });
   fillSelect("fProyecto",Object.keys(names).sort(),"Todos");
   fillSelect("fCadena",uniq(ALL,"cadena"),"Todas"); fillSelect("fDistrito",uniq(ALL,"distrito"),"Todos");
 }
+/* Periodo: si hay Desde/Hasta manda el rango; si no, el mes elegido; "Todos los meses" = sin filtro de fecha */
+function inPeriod(r){
+  var f=$("fDesde").value, t=$("fHasta").value, mes=$("fMes").value;
+  if(!f && !t && !mes) return true;
+  if(!r.fProg) return $("fSin").checked && r.res==="pendiente";
+  if(f||t){ var n=dnum(r.fProg), a=f?dnum({y:+f.slice(0,4),m:+f.slice(5,7)-1,d:+f.slice(8,10)}):0, b=t?dnum({y:+t.slice(0,4),m:+t.slice(5,7)-1,d:+t.slice(8,10)}):1e9; return n>=a && n<=b; }
+  return dkey(r.fProg)===mes;
+}
 function passOthers(r){
   var v=function(id){return $(id).value;}, q=norm($("search").value);
-  return (!v("fCadena")||r.cadena===v("fCadena")) && (!v("fDistrito")||r.distrito===v("fDistrito")) && (!v("fRes")||r.res===v("fRes")) && (!q||r.search.indexOf(q)>=0);
+  return inPeriod(r) && (!v("fCadena")||r.cadena===v("fCadena")) && (!v("fDistrito")||r.distrito===v("fDistrito")) && (!v("fRes")||r.res===v("fRes")) && (!q||r.search.indexOf(q)>=0);
 }
 
 /* ═══ Render ═══ */
@@ -299,7 +318,9 @@ function openLb(r){
 $("lb").onclick=function(e){ if(e.target===$("lb")) $("lb").classList.remove("on"); };
 document.addEventListener("keydown",function(e){ if(e.key==="Escape") $("lb").classList.remove("on"); });
 
-["fProyecto","fCadena","fDistrito","fRes","fFoto"].forEach(function(id){ $(id).onchange=render; });
+["fProyecto","fCadena","fDistrito","fRes","fFoto","fSin","fDesde","fHasta"].forEach(function(id){ $(id).onchange=render; });
+/* elegir un mes limpia el rango manual (el rango, si existe, manda sobre el mes) */
+$("fMes").onchange=function(){ $("fDesde").value=""; $("fHasta").value=""; render(); };
 $("search").oninput=render;
 
 function onData(rows, sources, label){
