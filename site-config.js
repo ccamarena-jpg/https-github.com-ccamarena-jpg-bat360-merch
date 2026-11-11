@@ -7,8 +7,8 @@ window.SITE = {
   // Mismo Client ID de Google que BAT 360. OJO: este dominio nuevo debe agregarse en Google Cloud → "Orígenes JavaScript autorizados".
   googleClientId: '382427877987-j68n1tmm6ers3biekqamem2jlrdguubj.apps.googleusercontent.com',
   usuarios: {
-    'ccamarena@ttaudit.com': { vistas: ['*'] }
-    // 'mcarhuallanqui@ttaudit.com': { vistas: ['*'] },
+    'ccamarena@ttaudit.com': { vistas: ['*'] },
+    'mcarhuallanqui@ttaudit.com': { vistas: ['*'] }
   },
   vistas: [
     { id: 'consolidado', seccion: 'Merch', icono: '📋', titulo: 'Consolidado',
