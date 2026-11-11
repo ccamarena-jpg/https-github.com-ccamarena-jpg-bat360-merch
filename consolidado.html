@@ -104,7 +104,8 @@ window.CONS = {
   scopes:   ["Files.Read.All"],
   driveId:  "b!ftpx1PHMU02Xyd_BvRi5gZ4jKtzFMjZHt1vZTICVWd0sPgcGYMRfTZopqpx_5vTB",
   itemId:   "015HP6ULNI7DK2HDKMWJE3MICO6AEXORUF",           // Crish (1) (1).xlsx  (se conserva aunque lo muevan/renombren)
-  sheet:    "NUEVO 2222"
+  sheet:    "NUEVO 2222",
+  year:     2026   // año de las fechas escritas sin año ("19-feb"). Cámbialo al empezar un año nuevo; no se usa la fecha de hoy.
 };
 
 (function(){
@@ -112,12 +113,13 @@ window.CONS = {
 var CFG = window.CONS, $ = function(id){ return document.getElementById(id); };
 var MESES = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,set:8,sep:8,oct:9,nov:10,dic:11};
 var MESN = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Setiembre","Octubre","Noviembre","Diciembre"];
-var YEAR_DEF = new Date().getFullYear();
+var YEAR_DEF = +CFG.year || new Date().getFullYear();
 var ALL = [], VIEW = [], dimKey = "proyecto", sortCol = null, sortDir = 1, detLimit = 200;
 
 function norm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim().toUpperCase(); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
 function pad(n){ return (n<10?"0":"")+n; }
+function safeUrl(u){ u=String(u==null?"":u).trim(); return /^https?:\/\//i.test(u) ? u : ""; }   // solo http(s): evita javascript: desde una celda
 
 /* Fechas: Date real, serial de Excel o texto "19-feb" (sin año ⇒ año actual). Devuelve {y,m,d} o null */
 function parseDate(v){
@@ -126,7 +128,7 @@ function parseDate(v){
   if(typeof v==="number" && v>20000 && v<80000){ var d=new Date(Math.round((v-25569)*86400000)); return {y:d.getUTCFullYear(),m:d.getUTCMonth(),d:d.getUTCDate()}; }
   var s = norm(v).toLowerCase(), m;
   if((m = s.match(/^(\d{1,2})[-\/ ]([a-z]{3})[a-z]*(?:[-\/ ](\d{2,4}))?$/)) && MESES[m[2]]!=null){
-    var y = m[3] ? (+m[3]<100 ? 2000+ +m[3] : +m[3]) : YEAR_DEF; return {y:y,m:MESES[m[2]],d:+m[1]};
+    var y = m[3] ? (+m[3]<100 ? 2000+ +m[3] : +m[3]) : YEAR_DEF; return {y:y,m:MESES[m[2]],d:+m[1],ny:!m[3]};
   }
   if((m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/))){ var yy=+m[3]<100?2000+ +m[3]:+m[3]; return {y:yy,m:+m[2]-1,d:+m[1]}; }
   return null;
@@ -168,6 +170,8 @@ function parseSheet(ws){
     var row=rows[r], g=function(k){ return map[k]==null ? "" : row[map[k]]; };
     if(!String(g("proyecto")).trim() && !String(g("tienda")).trim() && !String(g("codigo")).trim()) continue;
     var fp=parseDate(g("fProg")), fr=parseDate(g("fRep"));
+    /* Sin año: si la reportada cae >6 meses DESPUÉS de la programada (ej. reportada 20-dic, programada 05-ene), la reportada es del año anterior. */
+    if(fp && fr && fr.ny && (fr.y*12+fr.m)-(fp.y*12+fp.m) > 6) fr = {y:fr.y-1, m:fr.m, d:fr.d, ny:true};
     var o = {
       proyecto:norm(g("proyecto"))||"SIN PROYECTO", solicitante:String(g("solicitante")).trim(), codigo:String(g("codigo")).trim(),
       tienda:String(g("tienda")).trim(), cadena:String(g("cadena")).trim()||"SIN CADENA",
@@ -259,7 +263,7 @@ function renderDim(){
   }).join("");
   $("dimTable").innerHTML=head+(body||'<tr><td colspan="7" class="status">Sin datos para estos filtros.</td></tr>');
 }
-var COLS=[["fProg","Programada",function(r){return dstr(r.fProg);}],["fRep","Reportada",function(r){return dstr(r.fRep);}],["proyecto","Proyecto"],["tienda","Tienda"],["cadena","Cadena"],["distrito","Distrito"],["ot","OT"],["equipo","Equipo"],["merch","Merch"],["res","Resultado",function(r){return '<span class="chip '+r.res+'">'+({efectivo:"Efectivo",noefectivo:"No efectivo",pendiente:"Pendiente"}[r.res])+'</span>';}],["obs","Observaciones"],["link","Foto",function(r){return r.link?'<a href="'+esc(r.link)+'" target="_blank" rel="noopener">📷 ver</a>':"";}]];
+var COLS=[["fProg","Programada",function(r){return dstr(r.fProg);}],["fRep","Reportada",function(r){return dstr(r.fRep);}],["proyecto","Proyecto"],["tienda","Tienda"],["cadena","Cadena"],["distrito","Distrito"],["ot","OT"],["equipo","Equipo"],["merch","Merch"],["res","Resultado",function(r){return '<span class="chip '+r.res+'">'+({efectivo:"Efectivo",noefectivo:"No efectivo",pendiente:"Pendiente"}[r.res])+'</span>';}],["obs","Observaciones"],["link","Foto",function(r){var u=safeUrl(r.link); return u?'<a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer">📷 ver</a>':"";}]];
 function detRows(){
   var q=norm($("search").value), rows=VIEW.filter(function(r){return !q||r.search.indexOf(q)>=0;});
   if(sortCol){ var c=sortCol; rows=rows.slice().sort(function(a,b){ var x=a[c],y=b[c]; if(x&&x.y){x=x.y*400+x.m*32+x.d;} if(y&&y.y){y=y.y*400+y.m*32+y.d;} x=x==null?"":x; y=y==null?"":y; return (x>y?1:x<y?-1:0)*sortDir; }); }
@@ -343,16 +347,17 @@ function initMs(){
 /* ═══ Datos de ejemplo (filas reales de muestra del consolidado, solo para ver la vista) ═══ */
 $("sampleBtn").onclick=function(){
   var S=[
-    ["CAMBIOS DE CIGARRERA","EQUIPO PROMOTORÍA","TAMBO - ANCON2","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SQUAD","SERGIO + LUCAS","","CAMBIO DE CIGARRERA","19-feb","18-may","ANCON","CIG AEREA PIXEL 3.0 MD12 TRANSFORMADA"],
-    ["MANTENIMIENTOS KKAA","EQUIPO PROMOTORÍA","TAMBO - ANCON2","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SOLO","JEAN MARCO","","CAMBIO DE BRAZO HIDRÁULICO","26-ene","05-mar","ANCON",""],
-    ["ATERRAMIENTO","TT AUDIT","TAMBO - ANCON","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SQUAD","JOSE","","ATERRAMIENTO","27-ago","28-sep","ANCON",""],
-    ["CONQUISTA","ANA SOFIA BERNEDO","PILLCO HUALLPA CRISTINA","BODEGAS","PROGRAMADO","PROGRAMADO","SQUAD","RODRIGO + JEAN FRANCO","REVISAR MANUAL","INSTALACION 1 PIXEL 3.1","25-sep","09-nov","VILLA MARIA DEL TRIUNFO",""],
-    ["CONQUISTA","GIANCARLOS","SUAREZ SUAREZ ALAN PAUL","BODEGAS","POR PROGRAMAR","POR PROGRAMAR","SQUAD","","","INSTALAR 1 PIXEL 3.1","05-oct","","CHILCA",""],
-    ["BODEGAS","RICHARD CACERES","Espinoza vicente jesus","BODEGAS","PROGRAMADO","PROGRAMADO","SQUAD","SR JULIO + JORGE","","INSTALAR 1 PIXEL 3.1","27-oct","10-nov","CAÑETE",""],
-    ["MANTENIMIENTO KKAA","VENDEDOR","ZARATE CASTILLO MARILYN","BODEGAS","VISITADO","NO EFECTIVO","SOLO","RENATO","LOCAL CERRADO","INSTALAR D. MODULAR","04-nov","06-nov","CALLAO",""],
-    ["MANTENIMIENTO KKAA","SEBASTIAN OVIEDO","Ola y Sur","BODEGAS","VISITADO","EFECTIVO","SQUAD","SERGIO + JOSE","","MANTENIMIENTO CIGARRERA","13-oct","06-nov","PUNTA HERMOSA","PIXEL 3.0 MD 12"],
-    ["REVISITA PLACAS MULTICATEGORIA","TT AUDIT","PLUSMARKET","BODEGAS","VISITADO","NO EFECTIVO","SOLO","JOSUE","PUNTO CERRADO / POS NO PERMITIÓ","COLOCAR PLACA MULTICATEGORIA","06-oct","05-nov","JESUS MARÍA","STAR PIANO"],
-    ["CAMBIOS DE CIGARRERA","EQUIPO PROMOTORÍA","TAMBO - LINCE","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SQUAD","JOSE + LUCAS","","CAMBIO DE CIGARRERA","12-oct","05-nov","LINCE","STAR MASSI 2.0"]
+    /* Datos ficticios (sin nombres reales de personas ni tiendas): solo sirven para ver cómo se ve la vista. */
+    ["CAMBIOS DE CIGARRERA","SOLICITANTE 1","TAMBO - TIENDA EJEMPLO 1","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SQUAD","MERCH A + MERCH B","","CAMBIO DE CIGARRERA","19-feb","18-may","ANCON","CIG AEREA PIXEL 3.0 MD12 TRANSFORMADA"],
+    ["MANTENIMIENTOS KKAA","SOLICITANTE 1","TAMBO - TIENDA EJEMPLO 1","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SOLO","MERCH C","","CAMBIO DE BRAZO HIDRÁULICO","26-ene","05-mar","ANCON",""],
+    ["ATERRAMIENTO","SOLICITANTE 2","TAMBO - TIENDA EJEMPLO 2","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SQUAD","MERCH D","","ATERRAMIENTO","27-ago","28-sep","ANCON",""],
+    ["CONQUISTA","SOLICITANTE 3","BODEGA EJEMPLO 1","BODEGAS","PROGRAMADO","PROGRAMADO","SQUAD","MERCH E + MERCH F","REVISAR MANUAL","INSTALACION 1 PIXEL 3.1","25-sep","09-nov","VILLA MARIA DEL TRIUNFO",""],
+    ["CONQUISTA","SOLICITANTE 3","BODEGA EJEMPLO 2","BODEGAS","POR PROGRAMAR","POR PROGRAMAR","SQUAD","","","INSTALAR 1 PIXEL 3.1","05-oct","","CHILCA",""],
+    ["BODEGAS","SOLICITANTE 4","BODEGA EJEMPLO 3","BODEGAS","PROGRAMADO","PROGRAMADO","SQUAD","MERCH A + MERCH G","","INSTALAR 1 PIXEL 3.1","27-oct","10-nov","CAÑETE",""],
+    ["MANTENIMIENTO KKAA","SOLICITANTE 4","BODEGA EJEMPLO 4","BODEGAS","VISITADO","NO EFECTIVO","SOLO","MERCH H","LOCAL CERRADO","INSTALAR D. MODULAR","04-nov","06-nov","CALLAO",""],
+    ["MANTENIMIENTO KKAA","SOLICITANTE 2","BODEGA EJEMPLO 5","BODEGAS","VISITADO","EFECTIVO","SQUAD","MERCH B + MERCH D","","MANTENIMIENTO CIGARRERA","13-oct","06-nov","PUNTA HERMOSA","PIXEL 3.0 MD 12"],
+    ["REVISITA PLACAS MULTICATEGORIA","SOLICITANTE 1","BODEGA EJEMPLO 6","BODEGAS","VISITADO","NO EFECTIVO","SOLO","MERCH I","PUNTO CERRADO / POS NO PERMITIÓ","COLOCAR PLACA MULTICATEGORIA","06-oct","05-nov","JESUS MARÍA","STAR PIANO"],
+    ["CAMBIOS DE CIGARRERA","SOLICITANTE 1","TAMBO - TIENDA EJEMPLO 3","TIENDAS TAMBO S.A.C.","VISITADO","EFECTIVO","SQUAD","MERCH D + MERCH A","","CAMBIO DE CIGARRERA","12-oct","05-nov","LINCE","STAR MASSI 2.0"]
   ];
   var rows=S.map(function(s){ var o={proyecto:norm(s[0]),solicitante:s[1],codigo:"",tienda:s[2],cadena:s[3],status:statusCls(s[4]),res:estado(s[5],s[4]),equipo:equipoCls(s[6]),merch:s[7],obs:s[8],link:"",ot:s[9],fRep:parseDate(s[10]),fProg:parseDate(s[11]),cig:s[13]||"NA",cant:1,distrito:norm(s[12])};
     o.cigN=(o.cig==="NA"||o.cig==="")?"SIN CIGARRERA":norm(o.cig); o.search=norm([o.tienda,o.ot,o.merch,o.obs,o.proyecto,o.distrito].join(" ")); return o; });
