@@ -24,14 +24,14 @@
   .kpi.good b{color:var(--good)} .kpi.bad b{color:var(--bad)}
   .card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
   .bar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:var(--line)}
-  .bar i{display:block;height:100%} .bar .g{background:var(--good)} .bar .r{background:var(--bad)} .bar .p{background:var(--pend)}
+  .bar i{display:block;height:100%} .bar .g{background:var(--good)} .bar .r{background:var(--bad)} .bar .v{background:var(--brand)} .bar .p{background:var(--pend)}
   .projs{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:16px}
   .proj{background:var(--soft);border:2px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:var(--txt);font:inherit}
   .proj:hover{border-color:var(--muted)} .proj.on{border-color:var(--brand);background:var(--bg)}
   .proj b{display:block;font-size:12.5px;margin-bottom:2px} .proj small{display:block;color:var(--muted);font-size:11.5px;margin:4px 0 6px}
   .proj .pc{float:right;font-weight:700;font-size:13px}
   .chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600}
-  .chip.efectivo{background:rgba(31,157,87,.15);color:var(--good)} .chip.noefectivo{background:rgba(214,69,61,.15);color:var(--bad)} .chip.pendiente{background:rgba(120,130,150,.18);color:var(--muted)}
+  .chip.efectivo{background:rgba(31,157,87,.15);color:var(--good)} .chip.noefectivo{background:rgba(214,69,61,.15);color:var(--bad)} .chip.visitado{background:rgba(29,59,120,.14);color:var(--brand)} .chip.pendiente{background:rgba(120,130,150,.18);color:var(--muted)}
   table{width:100%;border-collapse:collapse;font-size:12.5px}
   th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
   th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);white-space:nowrap}
@@ -60,8 +60,8 @@
 <div class="row">
   <button class="btn primary" id="msConnect">🔐 Conectar con SharePoint (en vivo)</button>
   <button class="btn" id="msRefresh" hidden>🔄 Actualizar</button>
-  <label class="btn" style="margin:0">📂 Cargar Excel manual<input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" hidden></label>
-  <span class="status" id="status">Sin datos todavía. Conecta con SharePoint para leer el consolidado (hoja NUEVO 2222).</span>
+  <label class="btn" style="margin:0">📂 Cargar Excel manual<input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" multiple hidden></label>
+  <span class="status" id="status">Sin datos todavía. Conecta con SharePoint para leer los Excel de cada carpeta de PROYECTOS ACTUALES.</span>
   <span class="status" id="msUser"></span>
 </div>
 
@@ -73,7 +73,7 @@
     <div><label>Proyecto</label><select id="fProyecto"></select></div>
     <div><label>Cadena</label><select id="fCadena"></select></div>
     <div><label>Distrito</label><select id="fDistrito"></select></div>
-    <div><label>Resultado</label><select id="fRes"><option value="">Todos</option><option value="efectivo">Efectivo</option><option value="noefectivo">No efectivo</option><option value="pendiente">Pendiente</option></select></div>
+    <div><label>Resultado</label><select id="fRes"><option value="">Todos</option><option value="efectivo">Efectivo</option><option value="noefectivo">No efectivo</option><option value="visitado">Visitado (sin efectividad)</option><option value="pendiente">Pendiente</option></select></div>
     <div><label>Buscar</label><input type="text" id="search" placeholder="Tienda, código TT, OT, merch…"></div>
     <label class="chk"><input type="checkbox" id="fFoto" checked> Solo con foto</label>
   </div>
@@ -83,6 +83,12 @@
   <div class="card">
     <h3>Avance por mes <span class="status">· por fecha programada</span></h3>
     <div style="overflow-x:auto"><table id="monthTable"></table></div>
+  </div>
+
+  <div class="card">
+    <h3>Fuentes leídas <span class="status" id="srcCount"></span></h3>
+    <div style="overflow-x:auto;max-height:260px;overflow-y:auto"><table id="srcTable"></table></div>
+    <p class="hint">Cada Excel se lee tal cual lo actualiza tu equipo: se detectan solas las columnas (tienda, status, fecha, link de foto…). Si una carpeta aparece sin filas, su Excel no tiene columnas de tienda + status.</p>
   </div>
 
   <div class="card">
@@ -97,19 +103,18 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
 <script>
-/* ═══ Config: misma fuente que Consolidado (hoja NUEVO 2222 del archivo "Crish") ═══ */
+/* ═══ Config: carpeta PROYECTOS ACTUALES (OneDrive de acastro) leída en vivo vía Microsoft Graph ═══
+   Cada subcarpeta = una campaña. Se lee cada Excel tal como lo actualiza el equipo (sin depender del consolidado). */
 window.CONS = {
   clientId: "2dd44541-d3ac-459c-afa0-aa873590f7e0",
   tenant:   "9d85a34e-57e5-4f82-9341-7dd9300077b7",
   scopes:   ["Files.Read.All"],
   driveId:  "b!ftpx1PHMU02Xyd_BvRi5gZ4jKtzFMjZHt1vZTICVWd0sPgcGYMRfTZopqpx_5vTB",
-  itemId:   "015HP6ULNI7DK2HDKMWJE3MICO6AEXORUF",
-  sheet:    "NUEVO 2222",
-  year:     2026,
-  /* HW y Proyecto Interno tienen sus propias vistas: se excluyen aquí. Se compara contra el nombre del PROYECTO (sin tildes, mayúsculas). */
+  folderId: "015HP6ULJU6VJEWWCN4NDJJQZOAVGLAOL3",   // MASSIEL/BAT/BORRADOR/PLAN/PROYECTOS ACTUALES
+  year:     2026,   // año de las fechas escritas sin año ("19-feb"); si la foto trae fecha (…_20240401_…) se usa esa
+  /* HW y Proyecto Interno tienen sus propias vistas: se excluyen. Se compara contra el nombre de la carpeta (sin tildes, mayúsculas). */
   excluir:  [/\bHW\d*\b/, /HARDWARE/, /INTERNO/],
-  /* Nombres escritos distinto en el consolidado → una sola campaña. */
-  alias:    [[/^MANTENIMIENTOS? KKAA?$/, "MANTENIMIENTOS KKAA"]],
+  maxMB:    8,      // Excel más grandes (padrones/maestros) se omiten
   pageSize: 48
 };
 
@@ -119,13 +124,14 @@ var CFG = window.CONS, $ = function(id){ return document.getElementById(id); };
 var MESES = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,set:8,sep:8,oct:9,nov:10,dic:11};
 var MESN = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Set","Oct","Nov","Dic"];
 var YEAR_DEF = +CFG.year || new Date().getFullYear();
-var ALL = [], VIEW = [], PHOTOS = [], shown = 0, selProj = "";
+var ALL = [], VIEW = [], PHOTOS = [], SOURCES = [], shown = 0, selProj = "";
 
 function norm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim().toUpperCase(); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
 function pad(n){ return (n<10?"0":"")+n; }
 function safeUrl(u){ u=String(u==null?"":u).trim(); return /^https?:\/\//i.test(u) ? u : ""; }
 function isImg(u){ return /\.(jpe?g|png|webp|gif)(\?|#|$)/i.test(u) || /^https:\/\/storage\.googleapis\.com\/ttaudit_medias\//i.test(u); }
+function excluido(name){ var n=norm(name); return CFG.excluir.some(function(re){ return re.test(n); }); }
 
 function parseDate(v){
   if(v==null || v==="") return null;
@@ -141,57 +147,81 @@ function parseDate(v){
 var dkey = function(d){ return d ? d.y+"-"+pad(d.m+1) : ""; };
 var dstr = function(d){ return d ? pad(d.d)+"/"+pad(d.m+1)+"/"+d.y : ""; };
 var dnum = function(d){ return d ? d.y*400+d.m*32+d.d : 0; };
+/* Las fotos de ttaudit traen la fecha en el nombre (…_20240401_134847.jpg): sirve cuando la hoja escribe "01-abr" sin año. */
+function linkDate(u){ var m=String(u).match(/_(20\d\d)(\d\d)(\d\d)_/); return m && +m[2]>=1 && +m[2]<=12 ? {y:+m[1],m:+m[2]-1,d:+m[3]} : null; }
 
+/* efectivo / no efectivo / visitado (se fue, pero la hoja no dice si fue efectivo) / pendiente */
 function estado(efect, status){
-  var e = norm(efect), s = norm(status);
-  if(e.indexOf("NO EFECT")>=0 || e.indexOf("NO REALIZ")>=0) return "noefectivo";
-  if(e.indexOf("EFECT")>=0 || e==="REALIZADO") return "efectivo";
-  if(s.indexOf("NO EFECT")>=0) return "noefectivo";
+  var t = norm(efect)+"|"+norm(status);
+  if(/NO EFECT|NO REALIZ|NO SE PUDO|RECHAZ/.test(t)) return "noefectivo";
+  if(/EFECT|REALIZADO|INSTALADO|COMPLET|CONFORME/.test(t)) return "efectivo";
+  if(/VISIT/.test(t) && !/POR VISIT|NO VISIT/.test(t)) return "visitado";
   return "pendiente";
 }
-function proyName(raw){
-  var p = norm(raw) || "SIN PROYECTO";
-  for(var i=0;i<CFG.alias.length;i++) if(CFG.alias[i][0].test(p)) return CFG.alias[i][1];
-  return p;
-}
-function excluido(p){ return CFG.excluir.some(function(re){ return re.test(p); }); }
-var ALIAS = { proyecto:["PROYECTO"], codigo:["CODIGO TT"], tienda:["TIENDA"], cadena:["CADENA"], statusRaw:["STATUS"], efectRaw:["EFECTIVIDAD"],
-  merch:["MERCH"], obs:["OBSERVACIONES"], link:["LINK"], ot:["OT"], fProg:["FECHA PROGRAMADA"], fRep:["FECHA REPORTADA"], distrito:["DISTRITO"] };
+var ejec = function(c){ return c.t - c.pendiente; };
 
-function parseSheet(ws){
-  var rows = XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false});
-  var hi=-1, map={};
+/* ═══ Lectura genérica de cualquier Excel de proyecto: detecta el encabezado y las columnas por nombre ═══ */
+var COLS = {
+  tienda:["TIENDA","TIENDAS","POS","NOMBRE DEL PDV","NOMBRE PDV","PDV","NOMBRE DE LA TIENDA"],
+  codigo:["CODIGO TT","CODIGO TT AUDIT","COD TT AUDIT","ID STORE","CODIGO"],
+  status:["STATUS","ESTADO"], efect:["EFECTIVIDAD","RESULTADO"],
+  cadena:["CADENA"], distrito:["DISTRITO"], merch:["MERCH","ENCARGADO","MERCHANDISER"],
+  obs:["OBSERVACIONES","OBSERVACION","COMENTARIO","DETALLE COMENTARIOS NO EFECTIVOS","MOTIVO NO EFECTIVOS","OBSERVACIONES DETALLADAS"],
+  link:["LINK","LINK FOTO"], ot:["DETALLE DE OT","DETALLE DE OTS","TIPO DE OTS","OT"]
+};
+var DATE_PREF = ["EJECUCION","VISITADA","VISITA","PROGRAMADA","INSTALACION","REPORTADA"];
+function findCols(h){
+  var map={};
+  Object.keys(COLS).forEach(function(k){ for(var a=0;a<COLS[k].length;a++){ var ix=h.indexOf(COLS[k][a]); if(ix>=0){ map[k]=ix; break; } } });
+  for(var p=0;p<DATE_PREF.length && map.fecha==null;p++) for(var i=0;i<h.length;i++) if(h[i].indexOf("FECHA")===0 && h[i].indexOf(DATE_PREF[p])>=0){ map.fecha=i; break; }
+  if(map.fecha==null) for(var j=0;j<h.length;j++) if(h[j].indexOf("FECHA")===0){ map.fecha=j; break; }
+  return map;
+}
+function parseSheet(ws, proyecto){
+  var rows = XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false}), hi=-1, map=null;
   for(var i=0;i<Math.min(rows.length,15);i++){
-    var h = rows[i].map(norm);
-    if(h.indexOf("CODIGO TT")>=0 && h.indexOf("FECHA PROGRAMADA")>=0){ hi=i; Object.keys(ALIAS).forEach(function(k){ var ix=h.indexOf(ALIAS[k][0]); if(ix>=0) map[k]=ix; }); break; }
+    var m=findCols(rows[i].map(norm));
+    if(m.tienda!=null && (m.status!=null || m.efect!=null)){ hi=i; map=m; break; }
   }
-  if(hi<0) throw new Error("No encontré el encabezado (CODIGO TT / FECHA PROGRAMADA) en la hoja.");
+  if(hi<0) return null;
   var out=[];
   for(var r=hi+1;r<rows.length;r++){
     var row=rows[r], g=function(k){ return map[k]==null ? "" : row[map[k]]; };
-    if(!String(g("proyecto")).trim() && !String(g("tienda")).trim() && !String(g("codigo")).trim()) continue;
-    var p = proyName(g("proyecto")); if(excluido(p)) continue;
-    var fp=parseDate(g("fProg")), fr=parseDate(g("fRep"));
-    if(fp && fr && fr.ny && (fr.y*12+fr.m)-(fp.y*12+fp.m) > 6) fr = {y:fr.y-1, m:fr.m, d:fr.d, ny:true};
-    var o = { proyecto:p, codigo:String(g("codigo")).trim(), tienda:String(g("tienda")).trim(), cadena:String(g("cadena")).trim()||"SIN CADENA",
-      res:estado(g("efectRaw"),g("statusRaw")), merch:String(g("merch")).trim(), obs:String(g("obs")).trim(), link:safeUrl(g("link")), ot:String(g("ot")).trim(),
-      fProg:fp, fRep:fr, distrito:norm(g("distrito"))||"SIN DISTRITO" };
-    o.search = norm([o.tienda,o.codigo,o.ot,o.merch,o.obs,o.distrito].join(" "));
+    var tienda=String(g("tienda")).trim(); if(!tienda) continue;
+    var link=safeUrl(g("link")), fp=parseDate(g("fecha")), ld=linkDate(link);
+    if(ld){ if(!fp) fp = ld; else if(fp.ny) fp = {y:ld.y, m:fp.m, d:fp.d}; }   // la hoja manda; de la foto solo se toma el año (o la fecha si la hoja no tiene)
+    var cadena=String(g("cadena")).trim(); if(!cadena){ var pm=tienda.match(/^([A-Za-zÁÉÍÓÚÑáéíóúñ ]{2,20}?)\s+[-–]\s+/); cadena=pm?norm(pm[1]):"SIN CADENA"; }
+    var o={ proyecto:proyecto, codigo:String(g("codigo")).trim(), tienda:tienda, cadena:cadena, res:estado(g("efect"),g("status")),
+      merch:String(g("merch")).trim(), obs:String(g("obs")).trim(), link:link, ot:String(g("ot")).trim(), fProg:fp, fRep:null, distrito:norm(g("distrito"))||"SIN DISTRITO" };
+    o.search=norm([o.tienda,o.codigo,o.ot,o.merch,o.obs,o.distrito].join(" "));
     out.push(o);
   }
   return out;
 }
+/* Un libro puede tener hojas auxiliares: se usa la hoja visible con más filas válidas. */
+function parseWorkbook(wb, proyecto, file){
+  var meta=(wb.Workbook&&wb.Workbook.Sheets)||[], best=null;
+  wb.SheetNames.forEach(function(n,i){
+    if(meta[i] && meta[i].Hidden) return;
+    var r=parseSheet(wb.Sheets[n],proyecto);
+    if(r && (!best || r.length>best.rows.length)) best={rows:r,sheet:n};
+  });
+  if(!best || !best.rows.length) return {rows:[],src:{proyecto:proyecto,file:file,sheet:"",n:0,nota:"Sin columnas de tienda + status (o sin filas)"}};
+  return {rows:best.rows,src:{proyecto:proyecto,file:file,sheet:best.sheet,n:best.rows.length,nota:""}};
+}
 
-function counts(rows){ var c={t:0,efectivo:0,noefectivo:0,pendiente:0,foto:0}; rows.forEach(function(r){ c.t++; c[r.res]++; if(r.link) c.foto++; }); return c; }
+function counts(rows){ var c={t:0,efectivo:0,noefectivo:0,visitado:0,pendiente:0,foto:0}; rows.forEach(function(r){ c.t++; c[r.res]++; if(r.link) c.foto++; }); return c; }
 function pct(a,b){ return b ? Math.round(a*1000/b)/10+"%" : "–"; }
 function pnum(a,b){ return b ? Math.round(a*100/b) : 0; }
-var RESL = {efectivo:"Efectivo",noefectivo:"No efectivo",pendiente:"Pendiente"};
+var RESL = {efectivo:"Efectivo",noefectivo:"No efectivo",visitado:"Visitado",pendiente:"Pendiente"};
+function barHtml(c){ var w=function(x){return c.t?x*100/c.t:0;}; return '<div class="bar"><i class="g" style="width:'+w(c.efectivo)+'%"></i><i class="r" style="width:'+w(c.noefectivo)+'%"></i><i class="v" style="width:'+w(c.visitado)+'%"></i><i class="p" style="width:'+w(c.pendiente)+'%"></i></div>'; }
 
 /* ═══ Filtros ═══ */
 function fillSelect(id, vals, allLabel){ var el=$(id), cur=el.value; el.innerHTML='<option value="">'+allLabel+'</option>'+vals.map(function(v){return '<option>'+esc(v)+'</option>';}).join(""); if(cur&&vals.indexOf(cur)>=0) el.value=cur; }
 function uniq(rows,k){ var s={}; rows.forEach(function(r){ s[r[k]]=1; }); return Object.keys(s).sort(); }
 function buildFilters(){
-  fillSelect("fProyecto",uniq(ALL,"proyecto"),"Todos");
+  var names={}; ALL.forEach(function(r){ names[r.proyecto]=1; });
+  fillSelect("fProyecto",Object.keys(names).sort(),"Todos");
   fillSelect("fCadena",uniq(ALL,"cadena"),"Todas"); fillSelect("fDistrito",uniq(ALL,"distrito"),"Todos");
 }
 function passOthers(r){
@@ -205,47 +235,51 @@ function render(){
   var base = ALL.filter(passOthers);
   renderProjs(base);
   VIEW = base.filter(function(r){ return !selProj || r.proyecto===selProj; });
-  var c=counts(VIEW), ej=c.efectivo+c.noefectivo;
+  var c=counts(VIEW), ej=ejec(c);
   $("kpis").innerHTML=[
-    ["OT de la campaña",c.t,""],["Ejecutadas",ej,""],["Avance",pct(ej,c.t),""],["Efectivas",c.efectivo,"good"],["No efectivas",c.noefectivo,"bad"],
-    ["% efectividad",pct(c.efectivo,ej),""],["Pendientes",c.pendiente,""],["Con foto",c.foto,""]
+    ["OT / tiendas",c.t,""],["Ejecutadas",ej,""],["Avance",pct(ej,c.t),""],["Efectivas",c.efectivo,"good"],["No efectivas",c.noefectivo,"bad"],
+    ["% efectividad",pct(c.efectivo,c.efectivo+c.noefectivo),""],["Visitadas s/ dato",c.visitado,""],["Pendientes",c.pendiente,""],["Con foto",c.foto,""]
   ].map(function(k){ return '<div class="kpi '+k[2]+'"><b>'+k[1]+'</b><span>'+k[0]+'</span></div>'; }).join("");
-  renderMonths(); renderGallery(true); postH();
+  renderMonths(); renderSources(); renderGallery(true); postH();
 }
 function renderProjs(rows){
   var g={}; rows.forEach(function(r){ (g[r.proyecto]=g[r.proyecto]||[]).push(r); });
-  var list=Object.keys(g).map(function(k){ var c=counts(g[k]); c.k=k; return c; }).sort(function(a,b){return b.t-a.t;});
+  SOURCES.forEach(function(s){ if(!g[s.proyecto] && !s.excluida) g[s.proyecto]=[]; });
+  var list=Object.keys(g).map(function(k){ var c=counts(g[k]); c.k=k; return c; }).sort(function(a,b){return b.t-a.t || (a.k>b.k?1:-1);});
   var tot=counts(rows);
-  var card=function(k,c,label){ var ej=c.efectivo+c.noefectivo, w=function(x){return c.t?x*100/c.t:0;};
-    return '<button class="proj'+(selProj===k?" on":"")+'" data-k="'+esc(k)+'"><b><span class="pc">'+pnum(ej,c.t)+'%</span>'+esc(label)+'</b>'+
-      '<div class="bar"><i class="g" style="width:'+w(c.efectivo)+'%"></i><i class="r" style="width:'+w(c.noefectivo)+'%"></i><i class="p" style="width:'+w(c.pendiente)+'%"></i></div>'+
-      '<small>'+ej+' de '+c.t+' OT ejecutadas · '+c.foto+' 📷</small></button>'; };
+  var card=function(k,c,label){ var ej=ejec(c);
+    return '<button class="proj'+(selProj===k?" on":"")+'" data-k="'+esc(k)+'"><b><span class="pc">'+pnum(ej,c.t)+'%</span>'+esc(label)+'</b>'+barHtml(c)+
+      '<small>'+ej+' de '+c.t+' ejecutadas · '+c.foto+' 📷</small></button>'; };
   $("projs").innerHTML=card("",tot,"TODAS LAS CAMPAÑAS")+list.map(function(c){ return card(c.k,c,c.k); }).join("");
-  $("projHint").textContent="· "+list.length+" campañas · barra: verde efectivo, rojo no efectivo, gris pendiente";
+  $("projHint").textContent="· "+list.length+" campañas · barra: verde efectivo, rojo no efectivo, azul visitado sin dato, gris pendiente";
   Array.prototype.forEach.call($("projs").children,function(b){ b.onclick=function(){ $("fProyecto").value=b.dataset.k; render(); }; });
 }
 function renderMonths(){
-  var g={}, sin={efectivo:0,noefectivo:0,pendiente:0,t:0};
-  VIEW.forEach(function(r){ var k=r.fProg?dkey(r.fProg):"-"; (g[k]=g[k]||[]).push(r); });
+  var g={}; VIEW.forEach(function(r){ var k=r.fProg?dkey(r.fProg):"-"; (g[k]=g[k]||[]).push(r); });
   var keys=Object.keys(g).sort();
-  $("monthTable").innerHTML='<tr><th>Mes</th><th class="n">OT</th><th class="n">Efectivo</th><th class="n">No efectivo</th><th class="n">Pendiente</th><th class="n">% ejecutado</th><th style="width:160px"></th></tr>'+
-    keys.map(function(k){ var c=counts(g[k]), ej=c.efectivo+c.noefectivo, w=function(x){return c.t?x*100/c.t:0;}, p=k.split("-");
-      return '<tr><td>'+(k==="-"?"Sin fecha programada":MESN[+p[1]-1]+" "+p[0])+'</td><td class="n">'+c.t+'</td><td class="n">'+c.efectivo+'</td><td class="n">'+c.noefectivo+'</td><td class="n">'+c.pendiente+'</td><td class="n">'+pct(ej,c.t)+
-      '</td><td><div class="bar"><i class="g" style="width:'+w(c.efectivo)+'%"></i><i class="r" style="width:'+w(c.noefectivo)+'%"></i><i class="p" style="width:'+w(c.pendiente)+'%"></i></div></td></tr>'; }).join("")
+  $("monthTable").innerHTML='<tr><th>Mes</th><th class="n">OT</th><th class="n">Efectivo</th><th class="n">No efectivo</th><th class="n">Visitado</th><th class="n">Pendiente</th><th class="n">% ejecutado</th><th style="width:160px"></th></tr>'+
+    keys.map(function(k){ var c=counts(g[k]), p=k.split("-");
+      return '<tr><td>'+(k==="-"?"Sin fecha":MESN[+p[1]-1]+" "+p[0])+'</td><td class="n">'+c.t+'</td><td class="n">'+c.efectivo+'</td><td class="n">'+c.noefectivo+'</td><td class="n">'+c.visitado+'</td><td class="n">'+c.pendiente+'</td><td class="n">'+pct(ejec(c),c.t)+'</td><td>'+barHtml(c)+'</td></tr>'; }).join("")
     || '<tr><td class="status">Sin datos.</td></tr>';
+}
+function renderSources(){
+  var list=SOURCES.filter(function(s){ return !selProj || s.proyecto===selProj || s.excluida; });
+  $("srcCount").textContent="· "+SOURCES.filter(function(s){return !s.excluida && s.n>0;}).length+" archivos con datos";
+  $("srcTable").innerHTML='<tr><th>Carpeta</th><th>Archivo</th><th>Hoja</th><th class="n">Filas</th><th>Nota</th></tr>'+list.map(function(s){
+    return '<tr><td>'+esc(s.proyecto)+'</td><td>'+esc(s.file)+'</td><td>'+esc(s.sheet)+'</td><td class="n">'+(s.excluida?"":s.n)+'</td><td class="status'+(s.nota&&!s.excluida?" err":"")+'">'+esc(s.excluida?"Excluida (tiene su propia vista)":s.nota)+'</td></tr>'; }).join("");
 }
 
 /* ═══ Galería ═══ */
 function renderGallery(reset){
   if(reset){
-    PHOTOS = VIEW.filter(function(r){ return !$("fFoto").checked || r.link; }).sort(function(a,b){ return (dnum(b.fProg)||dnum(b.fRep)) - (dnum(a.fProg)||dnum(a.fRep)); });
+    PHOTOS = VIEW.filter(function(r){ return !$("fFoto").checked || r.link; }).sort(function(a,b){ return dnum(b.fProg) - dnum(a.fProg); });
     shown = 0; $("gal").innerHTML="";
   }
   var next = PHOTOS.slice(shown, shown+CFG.pageSize);
   $("gal").insertAdjacentHTML("beforeend", next.map(function(r,i){
     var idx=shown+i, im = r.link && isImg(r.link) ? '<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(r.link)+'" alt="" onerror="this.replaceWith(document.createTextNode(\'📷\'))">' : (r.link?'📷':'🚫');
     return '<div class="ph" data-i="'+idx+'"><div class="im">'+im+'</div><div class="tx"><b title="'+esc(r.tienda)+'">'+esc(r.tienda||"(sin tienda)")+'</b>'+
-      '<span>'+esc(r.proyecto)+'</span><br><span>'+esc(dstr(r.fProg||r.fRep))+' · </span><span class="chip '+r.res+'">'+RESL[r.res]+'</span></div></div>'; }).join(""));
+      '<span>'+esc(r.proyecto)+'</span><br><span>'+esc(dstr(r.fProg))+(r.fProg?' · ':'')+'</span><span class="chip '+r.res+'">'+RESL[r.res]+'</span></div></div>'; }).join(""));
   shown += next.length;
   $("galCount").textContent="· "+PHOTOS.length.toLocaleString("es-PE")+" registros";
   $("galHint").innerHTML = shown<PHOTOS.length ? 'Mostrando '+shown+' de '+PHOTOS.length+'. <a href="#" id="moreBtn">Mostrar más</a>' : (PHOTOS.length?"":"No hay registros con foto para estos filtros.");
@@ -258,7 +292,7 @@ function openLb(r){
   var big = r.link && isImg(r.link) ? '<img referrerpolicy="no-referrer" src="'+esc(r.link)+'" alt="">' : '<span style="color:#aaa">Sin vista previa'+(r.link?' · <a style="color:#9cf" target="_blank" rel="noopener noreferrer" href="'+esc(r.link)+'">abrir enlace</a>':"")+'</span>';
   var f=function(k,v){ return v?'<p><span class="k">'+k+'</span>'+esc(v)+'</p>':""; };
   $("lbBox").innerHTML='<div class="big">'+big+'</div><div class="inf"><h3>'+esc(r.tienda||"(sin tienda)")+'</h3><p><span class="chip '+r.res+'">'+RESL[r.res]+'</span></p>'+
-    f("Proyecto",r.proyecto)+f("Cadena",r.cadena)+f("Distrito",r.distrito)+f("Código TT",r.codigo)+f("OT",r.ot)+f("Programada",dstr(r.fProg))+f("Reportada",dstr(r.fRep))+f("Merch",r.merch)+f("Observaciones",r.obs)+
+    f("Proyecto",r.proyecto)+f("Cadena",r.cadena)+f("Distrito",r.distrito)+f("Código",r.codigo)+f("OT / detalle",r.ot)+f("Fecha",dstr(r.fProg))+f("Merch",r.merch)+f("Observaciones",r.obs)+
     (r.link?'<p><a target="_blank" rel="noopener noreferrer" href="'+esc(r.link)+'">Abrir foto original ↗</a></p>':"")+'</div>';
   $("lb").classList.add("on");
 }
@@ -268,26 +302,25 @@ document.addEventListener("keydown",function(e){ if(e.key==="Escape") $("lb").cl
 ["fProyecto","fCadena","fDistrito","fRes","fFoto"].forEach(function(id){ $(id).onchange=render; });
 $("search").oninput=render;
 
-function onData(rows, label){
-  ALL=rows; $("app").hidden=false; buildFilters(); render();
-  var st=$("status"); st.className="status ok"; st.textContent="✓ "+rows.length.toLocaleString("es-PE")+" OT · "+label;
+function onData(rows, sources, label){
+  ALL=rows; SOURCES=sources; $("app").hidden=false; buildFilters(); render();
+  var st=$("status"); st.className="status ok"; st.textContent="✓ "+rows.length.toLocaleString("es-PE")+" registros · "+label;
 }
 function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
 window.addEventListener("resize",postH);
-
-/* ═══ Carga manual ═══ */
-function parseBuffer(buf){
-  var wb=XLSX.read(buf,{type:"array",cellDates:true,sheets:CFG.sheet});
-  var ws=wb.Sheets[CFG.sheet] || (wb.SheetNames.length===1 ? wb.Sheets[wb.SheetNames[0]] : null);
-  if(!ws) throw new Error('No existe la hoja "'+CFG.sheet+'" en el archivo.');
-  return parseSheet(ws);
-}
-$("fileInput").onchange=function(e){ var f=e.target.files[0]; if(!f) return; setSt("Leyendo "+f.name+"…"); f.arrayBuffer().then(function(b){ onData(parseBuffer(b), f.name); }).catch(fail); };
 function setSt(t,cls){ var s=$("status"); s.textContent=t; s.className="status"+(cls?" "+cls:""); }
 function fail(err){ setSt("⚠ "+((err&&err.message)||err),"err"); }
+function readWb(buf){ return XLSX.read(buf,{type:"array",cellDates:true}); }
+
+/* ═══ Carga manual (uno o varios Excel; la campaña = nombre del archivo) ═══ */
+$("fileInput").onchange=function(e){
+  var files=[].slice.call(e.target.files); if(!files.length) return; setSt("Leyendo "+files.length+" archivo(s)…");
+  Promise.all(files.map(function(f){ return f.arrayBuffer().then(function(b){ var n=f.name.replace(/\.[^.]+$/,""); return parseWorkbook(readWb(b),norm(n),f.name); }); }))
+  .then(function(rs){ onData([].concat.apply([],rs.map(function(r){return r.rows;})), rs.map(function(r){return r.src;}), "carga manual"); }).catch(fail);
+};
 
 /* ═══ Conexión en vivo: Microsoft Graph + MSAL ═══ */
-var msalApp=null, busy=false;
+var msalApp=null, busy=false, G="https://graph.microsoft.com/v1.0/drives/"+CFG.driveId;
 function token(interactive){
   var req={scopes:CFG.scopes}, acc=msalApp.getAllAccounts()[0];
   if(acc){ req.account=acc; return msalApp.acquireTokenSilent(req).then(function(r){return r.accessToken;}).catch(function(){
@@ -295,17 +328,48 @@ function token(interactive){
   if(!interactive) return Promise.reject(new Error("no-account"));
   return msalApp.loginPopup(req).then(function(r){ $("msUser").textContent=r.account.username; return r.accessToken; });
 }
+function gfetch(url,t){ return fetch(url,{headers:{Authorization:"Bearer "+t}}).then(function(r){ if(!r.ok) throw new Error("Graph HTTP "+r.status); return r; }); }
+function kids(id,t){ return gfetch(G+"/items/"+id+"/children?$select=id,name,size,folder,file&$top=200",t).then(function(r){return r.json();}).then(function(j){return j.value||[];}); }
+var isXlsx=function(it){ return it.file && /\.xls[xm]$/i.test(it.name) && it.name.indexOf("~$")!==0; };
+
 function loadLive(silent){
-  if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y descargando el consolidado (≈15 MB, puede tardar)…");
-  token(!silent).then(function(t){
-    return fetch("https://graph.microsoft.com/v1.0/drives/"+CFG.driveId+"/items/"+CFG.itemId+"/content",{headers:{Authorization:"Bearer "+t}});
-  }).then(function(res){ if(!res.ok) throw new Error("Graph HTTP "+res.status); setSt("Procesando hoja "+CFG.sheet+"…"); return res.arrayBuffer(); })
-  .then(function(buf){ onData(parseBuffer(buf),"SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false; })
-  .catch(function(err){
+  if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y buscando las carpetas de proyectos…");
+  var t, jobs=[], sources=[];
+  token(!silent).then(function(tk){ t=tk; return kids(CFG.folderId,t); })
+  .then(function(folders){
+    folders=folders.filter(function(f){ return f.folder; });
+    var short=function(n){ return norm(n).replace(/^PROYECTO\s+/,""); };
+    return Promise.all(folders.map(function(f){
+      if(excluido(f.name)){ sources.push({proyecto:short(f.name),file:"(carpeta)",sheet:"",n:0,nota:"",excluida:true}); return null; }
+      return kids(f.id,t).then(function(items){
+        var subs=items.filter(function(i){return i.folder;});
+        return Promise.all(subs.map(function(s){ return kids(s.id,t); })).then(function(more){
+          items.concat([].concat.apply([],more)).forEach(function(i){
+            if(!isXlsx(i)) return;
+            if(i.size>CFG.maxMB*1048576){ sources.push({proyecto:short(f.name),file:i.name,sheet:"",n:0,nota:"Omitido: pesa "+(i.size/1048576).toFixed(1)+" MB (padrón/maestro)"}); return; }
+            jobs.push({id:i.id,name:i.name,proyecto:short(f.name)});
+          });
+        });
+      });
+    }));
+  }).then(function(){
+    var rows=[], done=0, q=jobs.slice();
+    function worker(){
+      var j=q.shift(); if(!j) return Promise.resolve();
+      return gfetch(G+"/items/"+j.id+"/content",t).then(function(r){return r.arrayBuffer();}).then(function(b){
+        var r=parseWorkbook(readWb(b),j.proyecto,j.name); rows=rows.concat(r.rows); sources.push(r.src);
+      }).catch(function(e){ sources.push({proyecto:j.proyecto,file:j.name,sheet:"",n:0,nota:"Error al leer: "+((e&&e.message)||e)}); })
+      .then(function(){ done++; setSt("Leyendo Excel de proyectos… "+done+" de "+jobs.length); return worker(); });
+    }
+    return Promise.all([worker(),worker(),worker(),worker()]).then(function(){ return {rows:rows,sources:sources}; });
+  }).then(function(res){
+    res.sources.sort(function(a,b){ return a.proyecto>b.proyecto?1:a.proyecto<b.proyecto?-1:0; });
+    onData(res.rows,res.sources,"SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false;
+  }).catch(function(err){
     var m=(err&&err.message)||String(err);
     if(silent && (m==="no-account"||m==="silent-failed")) return;
-    if(m.indexOf("403")>=0) setSt("⚠ Tu cuenta no tiene acceso al archivo (403). Pide a acastro que te comparta la carpeta MASSIEL/BAT/BORRADOR/PLAN, o usa la carga manual.","err");
-    else if(m.indexOf("404")>=0) setSt("⚠ No se encontró el archivo (404): lo movieron o borraron. Usa la carga manual.","err");
+    if(m.indexOf("403")>=0) setSt("⚠ Tu cuenta no tiene acceso a la carpeta (403). Pide a acastro que te comparta MASSIEL/BAT/BORRADOR/PLAN/PROYECTOS ACTUALES, o usa la carga manual.","err");
+    else if(m.indexOf("404")>=0) setSt("⚠ No se encontró la carpeta (404): la movieron o borraron. Usa la carga manual.","err");
     else if(m.indexOf("interaction_in_progress")>=0) setSt("⚠ Hay un inicio de sesión en curso. Recarga (F5) y completa el login.","err");
     else if(m.indexOf("popup")>=0) setSt("⚠ El navegador bloqueó la ventana de inicio de sesión: permite ventanas emergentes para este sitio.","err");
     else fail(err);
