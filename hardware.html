@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hardware · BAT 360 Merch</title>
+<style>
+  :root{ --bg:#ffffff; --txt:#1b2a47; --muted:#6c7a92; --line:#dde4ee; --brand:#1d3b78; --soft:#f2f5fa; --good:#1f9d57; --bad:#d6453d; --warn:#e0a100; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#1F2224; --txt:#EDEBE5; --muted:#9C9A92; --line:#33363A; --brand:#7FB4D4; --soft:#26292B; --good:#4cc283; --bad:#ef7a73; --warn:#f0c040; } }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
+  h3{font-size:14px;margin:0 0 8px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{background:var(--soft);border:1px solid var(--line);color:var(--txt);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600}
+  .btn:hover{background:var(--line)} .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)} .btn[hidden]{display:none}
+  .status{font-size:12.5px;color:var(--muted)} .status.ok{color:var(--good)} .status.err{color:var(--bad)}
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px;align-items:end}
+  .filters label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+  select,input[type=text]{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--txt);font-size:13px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:0 0 16px}
+  .kpi{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .kpi b{display:block;font-size:24px;line-height:1.15} .kpi span{font-size:11.5px;color:var(--muted)} .kpi small{display:block;font-size:12px;margin-top:2px}
+  .good{color:var(--good)} .bad{color:var(--bad)}
+  .card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .tab{padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:12px;color:var(--muted)}
+  .tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);white-space:nowrap;position:sticky;top:0;background:var(--soft)}
+  td.n,th.n{text-align:right;white-space:nowrap}
+  tr.click{cursor:pointer} tr.click:hover{background:rgba(29,59,120,.07)}
+  .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;min-width:80px} .bar i{display:block;height:100%;background:var(--brand)}
+  .scroll{overflow-x:auto;max-height:480px;overflow-y:auto}
+  .hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
+  .cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:end;margin-bottom:10px}
+  .cmp label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+  .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+  .tag{font-size:10.5px;padding:1px 7px;border-radius:999px;background:rgba(29,59,120,.12);color:var(--brand);font-weight:600}
+  a{color:var(--brand)}
+</style>
+</head>
+<body>
+
+<div class="row">
+  <button class="btn primary" id="msConnect">🔐 Conectar con SharePoint (en vivo)</button>
+  <button class="btn" id="msRefresh" hidden>🔄 Actualizar</button>
+  <label class="btn" style="margin:0">📂 Cargar Excel manual<input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" hidden></label>
+  <span class="status" id="status">Sin datos todavía. Conecta con SharePoint para leer el archivo de Hardware (hoja BBDD).</span>
+  <span class="status" id="msUser"></span>
+</div>
+
+<div id="app" hidden>
+  <div class="filters">
+    <div><label>Zona</label><select id="fZona"></select></div>
+    <div><label>Canal</label><select id="fCanal"></select></div>
+    <div><label>Ciudad</label><select id="fCiudad"></select></div>
+    <div><label>Cadena</label><select id="fCadena"></select></div>
+    <div><button class="btn" id="clear">Limpiar filtros</button></div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>Indicadores <span class="status" id="dimHint"></span></h3>
+    <div class="tabs" id="tabs"></div>
+    <div class="scroll"><table id="dimTable"></table></div>
+    <p class="hint" id="dimNote"></p>
+  </div>
+
+  <div class="card">
+    <h3>Cantidad de cada activo <span class="status" id="actCount"></span></h3>
+    <div class="row" style="margin-bottom:8px"><div class="tabs" id="catTabs" style="margin:0"></div>
+      <input type="text" id="actSearch" placeholder="Buscar activo…" style="max-width:240px"><button class="btn" id="actCsv">⬇ Exportar CSV</button></div>
+    <div class="scroll"><table id="actTable"></table></div>
+    <p class="hint" id="actNote"></p>
+  </div>
+
+  <div class="card">
+    <h3>Histórico por cortes</h3>
+    <p class="hint" style="margin:0 0 10px">El Excel se sobrescribe en cada corte, pero SharePoint guarda las versiones anteriores del archivo. Elige dos cortes y compara: PDV nuevos, PDV que salieron y cuánto cambió cada activo. También puedes cargar a mano un Excel de un corte anterior.</p>
+    <div class="cmp">
+      <div><label>Corte anterior</label><select id="cA"></select></div>
+      <div><label>Corte actual</label><select id="cB"></select></div>
+      <div><button class="btn primary" id="cmpBtn">Comparar cortes</button></div>
+      <div><label class="btn" style="margin:0;display:inline-block">📂 Excel de un corte anterior<input type="file" id="oldFile" accept=".xlsx,.xlsm,.xls" hidden></label></div>
+    </div>
+    <span class="status" id="cmpStatus"></span>
+    <div id="cmpOut"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="hw-data.js"></script>
+<script>
+(function(){
+"use strict";
+var $ = function(id){ return document.getElementById(id); }, esc = HW.esc, ALL = [], ITEM = null, VERS = [], dimKey = "ciudad", catSel = "", META = null;
+var nf = function(n){ return Number(n).toLocaleString("es-PE"); };
+var pct = function(a,b){ return b ? (Math.round(a*1000/b)/10)+"%" : "–"; };
+var dlt = function(n){ return n>0 ? '<span class="good">+'+nf(n)+'</span>' : n<0 ? '<span class="bad">'+nf(n)+'</span>' : '<span class="status">0</span>'; };
+function csv(name, head, rows){
+  var q=function(v){ return '"'+String(v==null?"":v).replace(/"/g,'""')+'"'; };
+  var a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+[head].concat(rows).map(function(r){return r.map(q).join(",");}).join("\r\n")],{type:"text/csv"})); a.download=name; a.click();
+}
+
+/* ═══ Filtros ═══ */
+var FILT = [["fZona","zona","Todas"],["fCanal","canal","Todos"],["fCiudad","ciudad","Todas"],["fCadena","cadena","Todas"]];
+function buildFilters(){
+  FILT.forEach(function(f){ var el=$(f[0]), cur=el.value, s={}; ALL.forEach(function(r){ s[r[f[1]]]=1; }); var vals=Object.keys(s).sort();
+    el.innerHTML='<option value="">'+f[2]+'</option>'+vals.map(function(v){return '<option>'+esc(v)+'</option>';}).join(""); if(cur&&vals.indexOf(cur)>=0) el.value=cur; });
+}
+function filtered(){ return ALL.filter(function(r){ return FILT.every(function(f){ var v=$(f[0]).value; return !v || r[f[1]]===v; }); }); }
+FILT.forEach(function(f){ $(f[0]).onchange=render; });
+$("clear").onclick=function(){ FILT.forEach(function(f){ $(f[0]).value=""; }); render(); };
+
+/* ═══ Render ═══ */
+function render(){
+  var rows=filtered(), t=HW.totals(rows);
+  $("kpis").innerHTML=[["PDV con hardware",nf(t.pdv),""],["Ciudades",t.ciudades,""],["Cigarreras",nf(t.cig),""],["Dispensers",nf(t.disp),""],["Glorificadores",nf(t.glor),""],["TV",nf(t.tv),""],
+    ["Total de activos",nf(t.total),""],["PDV con comodato",nf(t.comodato),""],["PDV viajeros",nf(t.viajero),""]]
+    .map(function(k){ return '<div class="kpi"><b>'+k[1]+'</b><span>'+k[0]+'</span></div>'; }).join("");
+  renderDim(rows); renderAct(rows); postH();
+}
+function buildTabs(){
+  $("tabs").innerHTML=Object.keys(HW.DIMS).map(function(k){ return '<span class="tab'+(k===dimKey?" on":"")+'" data-k="'+k+'">'+HW.DIMS[k]+'</span>'; }).join("");
+  Array.prototype.forEach.call($("tabs").children,function(el){ el.onclick=function(){ dimKey=el.dataset.k; buildTabs(); renderDim(filtered()); postH(); }; });
+}
+var FILTRABLE = {ciudad:"fCiudad",cadena:"fCadena",zona:"fZona",canal:"fCanal"};
+function renderDim(rows){
+  var list=HW.byDim(rows,dimKey), max=list.reduce(function(m,o){return Math.max(m,o.pdv);},1), total=rows.length;
+  $("dimHint").textContent="· "+list.length+" "+HW.DIMS[dimKey].toLowerCase();
+  $("dimTable").innerHTML='<tr><th>'+esc(HW.DIMS[dimKey])+'</th><th class="n">PDV</th><th class="n">% PDV</th><th class="n">Cigarreras</th><th class="n">Dispensers</th><th class="n">Glorif.</th><th class="n">TV</th><th class="n">Total activos</th><th style="width:130px"></th></tr>'+
+    list.map(function(o){ return '<tr class="'+(FILTRABLE[dimKey]?"click":"")+'" data-k="'+esc(o.k)+'"><td>'+esc(o.k)+'</td><td class="n">'+nf(o.pdv)+'</td><td class="n">'+pct(o.pdv,total)+'</td><td class="n">'+nf(o.cig)+'</td><td class="n">'+nf(o.disp)+'</td><td class="n">'+nf(o.glor)+'</td><td class="n">'+nf(o.tv)+'</td><td class="n">'+nf(o.total)+'</td><td><div class="bar"><i style="width:'+(o.pdv*100/max)+'%"></i></div></td></tr>'; }).join("");
+  $("dimNote").textContent = FILTRABLE[dimKey] ? "Toca una fila para filtrar todo por ese valor." : "Cuenta de PDV según lo escrito en el Excel («N/A» = sin comunicación).";
+  Array.prototype.forEach.call($("dimTable").querySelectorAll("tr.click"),function(tr){ tr.onclick=function(){ var el=$(FILTRABLE[dimKey]); el.value=tr.dataset.k; render(); }; });
+}
+function renderAct(rows){
+  var all=HW.byActivo(rows), cats={}; all.forEach(function(a){ cats[a.cat]=(cats[a.cat]||0)+a.units; });
+  $("catTabs").innerHTML='<span class="tab'+(catSel===""?" on":"")+'" data-c="">Todos</span>'+Object.keys(cats).map(function(c){ return '<span class="tab'+(catSel===c?" on":"")+'" data-c="'+esc(c)+'">'+esc(c)+' · '+nf(cats[c])+'</span>'; }).join("");
+  Array.prototype.forEach.call($("catTabs").children,function(el){ el.onclick=function(){ catSel=el.dataset.c; renderAct(filtered()); postH(); }; });
+  var q=HW.norm($("actSearch").value), list=all.filter(function(a){ return (!catSel||a.cat===catSel) && (!q||HW.norm(a.cat+" "+a.act).indexOf(q)>=0); }).sort(function(a,b){ return b.units-a.units; });
+  window.__actList=list;
+  $("actCount").textContent="· "+list.length+" activos distintos";
+  $("actTable").innerHTML='<tr><th>Categoría</th><th>Activo</th><th class="n">PDV</th><th class="n">Unidades</th><th style="width:130px"></th></tr>'+
+    list.slice(0,400).map(function(a){ var mx=list[0].units; return '<tr><td><span class="tag">'+esc(a.cat)+'</span></td><td>'+esc(a.act)+'</td><td class="n">'+nf(a.pdv)+'</td><td class="n">'+nf(a.units)+'</td><td><div class="bar"><i style="width:'+(a.units*100/mx)+'%"></i></div></td></tr>'; }).join("");
+  $("actNote").textContent = META ? "Unidades = cantidades escritas en el Excel (cigarreras A/B/C, dispenser A/B, glorificadores, volumétricos, TV, espejo)."+(META.cantidadesRaras?" "+META.cantidadesRaras+" cantidades mayores a "+HW.CFG.maxQty+" se contaron como 1 por parecer error de digitación.":"")+(META.duplicados?" "+META.duplicados+" ID STORE repetidos se ignoraron.":"") : "";
+}
+$("actSearch").oninput=function(){ renderAct(filtered()); postH(); };
+$("actCsv").onclick=function(){ csv("hardware_activos.csv",["Categoría","Activo","PDV","Unidades"],(window.__actList||[]).map(function(a){return [a.cat,a.act,a.pdv,a.units];})); };
+
+/* ═══ Carga ═══ */
+function onData(res,label){
+  ALL=res.rows; META=res.meta; $("app").hidden=false; buildFilters(); buildTabs(); render();
+  var st=$("status"); st.className="status ok"; st.textContent="✓ "+nf(ALL.length)+" PDV · "+label;
+}
+function setSt(t,cls){ var s=$("status"); s.textContent=t; s.className="status"+(cls?" "+cls:""); }
+function fail(e){ setSt("⚠ "+HW.errorMsg(e),"err"); }
+function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
+window.addEventListener("resize",postH);
+$("fileInput").onchange=function(e){ var f=e.target.files[0]; if(!f) return; setSt("Leyendo "+f.name+"…"); f.arrayBuffer().then(function(b){ onData(HW.parseBook(b),f.name); }).catch(fail); };
+
+var busy=false;
+function loadLive(silent){
+  if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y buscando el archivo de Hardware…");
+  var t;
+  HW.auth.token(!silent).then(function(tk){ t=tk; return HW.graph.findFile(t); })
+  .then(function(item){ ITEM=item; setSt("Descargando "+item.name+" ("+(item.size/1048576).toFixed(1)+" MB)…"); return HW.graph.download(t,item); })
+  .then(function(buf){ setSt("Procesando hoja BBDD…"); var res=HW.parseBook(buf); onData(res,ITEM.name+" · SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false; return loadVersions(t); })
+  .catch(function(err){ var m=(err&&err.message)||""; if(silent && (m==="no-account"||m==="silent-failed")) return; fail(err); })
+  .finally(function(){ busy=false; });
+}
+$("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
+HW.auth.init(function(u){ $("msUser").textContent=u; }).then(function(has){ if(!has) { if(typeof msal==="undefined") $("msConnect").hidden=true; return; } loadLive(true); });
+
+/* ═══ Cortes: versiones del archivo en SharePoint ═══ */
+function fdt(s){ var d=new Date(s); return d.toLocaleDateString("es-PE",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"}); }
+function loadVersions(t){
+  return HW.graph.versions(t,ITEM).then(function(v){
+    VERS=v; var opt=function(x,i){ return '<option value="'+esc(x.id)+'">'+fdt(x.fecha)+' · '+(x.size/1048576).toFixed(1)+' MB'+(x.por?' · '+esc(x.por):'')+(i===0?' (vigente)':'')+'</option>'; };
+    $("cB").innerHTML=v.map(opt).join(""); $("cA").innerHTML=v.map(opt).join("");
+    /* corte anterior por defecto: la versión más cercana a 14 días antes de la vigente */
+    var ref=new Date(v[0].fecha).getTime()-14*864e5, best=v[v.length-1], bd=1e18;
+    v.slice(1).forEach(function(x){ var d=Math.abs(new Date(x.fecha).getTime()-ref); if(d<bd){ bd=d; best=x; } });
+    $("cA").value=(v.length>1?best:v[0]).id; $("cB").value=v[0].id;
+    $("cmpStatus").textContent=v.length+" versiones guardadas en SharePoint.";
+  }).catch(function(e){ VERS=[]; $("cmpStatus").textContent="No pude leer las versiones del archivo ("+HW.errorMsg(e)+"). Usa «Excel de un corte anterior»."; });
+}
+$("cmpBtn").onclick=function(){
+  if(!ITEM||!VERS.length){ $("cmpStatus").textContent="Conecta con SharePoint primero (o carga un Excel anterior)."; return; }
+  var a=$("cA").value, b=$("cB").value; if(a===b){ $("cmpStatus").textContent="Elige dos cortes distintos."; return; }
+  $("cmpStatus").textContent="Descargando los dos cortes…";
+  HW.auth.token(true).then(function(t){
+    var dl=function(id){ return HW.graph.download(t,ITEM,id).then(function(buf){ return HW.parseBook(buf).rows; }); };
+    return Promise.all([dl(a),dl(b)]);
+  }).then(function(r){ var ta=VERS.filter(function(x){return x.id===a;})[0], tb=VERS.filter(function(x){return x.id===b;})[0]; showCmp(HW.compare(r[0],r[1]),"Corte del "+fdt(ta.fecha),"Corte del "+fdt(tb.fecha)); $("cmpStatus").textContent=""; })
+  .catch(function(e){ $("cmpStatus").textContent="⚠ "+HW.errorMsg(e); });
+};
+$("oldFile").onchange=function(e){
+  var f=e.target.files[0]; if(!f) return; if(!ALL.length){ $("cmpStatus").textContent="Primero carga o conecta el corte actual."; return; }
+  $("cmpStatus").textContent="Leyendo "+f.name+"…";
+  f.arrayBuffer().then(function(b){ var old=HW.parseBook(b).rows; showCmp(HW.compare(old,ALL),f.name,"Corte actual (cargado)"); $("cmpStatus").textContent=""; }).catch(function(err){ $("cmpStatus").textContent="⚠ "+HW.errorMsg(err); });
+};
+function showCmp(c,la,lb){
+  var ta=c.totA, tb=c.totB, k=function(l,a,b){ return '<div class="kpi"><b>'+nf(b)+'</b><span>'+l+'</span><small>'+dlt(b-a)+' <span class="status">vs '+nf(a)+'</span></small></div>'; };
+  var dt=function(title,list,key){ return '<div><h3>'+title+'</h3><div class="scroll" style="max-height:340px"><table><tr><th>'+esc(key)+'</th><th class="n">PDV antes</th><th class="n">PDV ahora</th><th class="n">Δ PDV</th><th class="n">Activos antes</th><th class="n">Activos ahora</th><th class="n">Δ activos</th></tr>'+
+    list.filter(function(o){return o.pdvD||o.totD;}).map(function(o){ return '<tr><td>'+esc(o.k)+'</td><td class="n">'+nf(o.pdvA)+'</td><td class="n">'+nf(o.pdvB)+'</td><td class="n">'+dlt(o.pdvD)+'</td><td class="n">'+nf(o.totA)+'</td><td class="n">'+nf(o.totB)+'</td><td class="n">'+dlt(o.totD)+'</td></tr>'; }).join("")+'</table></div></div>'; };
+  var pdvT=function(list,max){ return '<div class="scroll" style="max-height:300px"><table><tr><th>ID STORE</th><th>POS</th><th>Ciudad</th><th>Cadena</th><th class="n">Activos</th></tr>'+list.slice(0,max).map(function(r){ return '<tr><td>'+esc(r.id)+'</td><td>'+esc(r.pos)+'</td><td>'+esc(r.ciudad)+'</td><td>'+esc(r.cadena)+'</td><td class="n">'+r.u.total+'</td></tr>'; }).join("")+'</table></div>'+(list.length>max?'<p class="hint">Mostrando '+max+' de '+nf(list.length)+'. Exporta el CSV para ver todos.</p>':''); };
+  $("cmpOut").innerHTML='<p style="margin:12px 0 8px"><b>'+esc(la)+'</b> → <b>'+esc(lb)+'</b></p>'+
+    '<div class="kpis">'+k("PDV",ta.pdv,tb.pdv)+k("Cigarreras",ta.cig,tb.cig)+k("Dispensers",ta.disp,tb.disp)+k("Glorificadores",ta.glor,tb.glor)+k("TV",ta.tv,tb.tv)+k("Total activos",ta.total,tb.total)+'</div>'+
+    '<div class="two">'+dt("Por ciudad",c.ciudad,"Ciudad")+dt("Por cadena",c.cadena,"Cadena")+'</div>'+
+    '<h3 style="margin-top:14px">Cambio por activo</h3><div class="scroll" style="max-height:300px"><table><tr><th>Categoría</th><th>Activo</th><th class="n">Unidades antes</th><th class="n">Unidades ahora</th><th class="n">Δ</th><th class="n">PDV antes</th><th class="n">PDV ahora</th></tr>'+
+      (c.activos.map(function(a){ return '<tr><td><span class="tag">'+esc(a.cat)+'</span></td><td>'+esc(a.act)+'</td><td class="n">'+nf(a.uA)+'</td><td class="n">'+nf(a.uB)+'</td><td class="n">'+dlt(a.uD)+'</td><td class="n">'+nf(a.pA)+'</td><td class="n">'+nf(a.pB)+'</td></tr>'; }).join("")||'<tr><td colspan="7" class="status">Sin cambios de activos.</td></tr>')+'</table></div>'+
+    '<div class="two" style="margin-top:14px"><div><h3>PDV nuevos <span class="status">· '+nf(c.nuevos.length)+'</span> <button class="btn" id="csvNew">⬇ CSV</button></h3>'+pdvT(c.nuevos,100)+'</div>'+
+    '<div><h3>PDV que salieron <span class="status">· '+nf(c.salieron.length)+'</span> <button class="btn" id="csvOut">⬇ CSV</button></h3>'+pdvT(c.salieron,100)+'</div></div>'+
+    '<h3 style="margin-top:14px">PDV con cambio de activos <span class="status">· '+nf(c.cambios.length)+' (mismo ID STORE, distinto hardware)</span></h3>'+
+    '<div class="scroll" style="max-height:300px"><table><tr><th>ID STORE</th><th>POS</th><th>Ciudad</th><th class="n">Antes</th><th class="n">Ahora</th></tr>'+c.cambios.slice(0,100).map(function(x){ return '<tr><td>'+esc(x.ahora.id)+'</td><td>'+esc(x.ahora.pos)+'</td><td>'+esc(x.ahora.ciudad)+'</td><td class="n">'+x.antes.u.total+'</td><td class="n">'+x.ahora.u.total+'</td></tr>'; }).join("")+'</table></div>';
+  var row=function(r){ return [r.id,r.pos,r.ciudad,r.cadena,r.zona,r.u.total]; };
+  $("csvNew").onclick=function(){ csv("pdv_nuevos.csv",["ID STORE","POS","Ciudad","Cadena","Zona","Activos"],c.nuevos.map(row)); };
+  $("csvOut").onclick=function(){ csv("pdv_salieron.csv",["ID STORE","POS","Ciudad","Cadena","Zona","Activos"],c.salieron.map(row)); };
+  postH();
+}
+postH();
+})();
+</script>
+</body>
+</html>

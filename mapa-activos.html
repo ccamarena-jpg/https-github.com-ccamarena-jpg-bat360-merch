@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de activos · BAT 360 Merch</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{ --bg:#ffffff; --txt:#1b2a47; --muted:#6c7a92; --line:#dde4ee; --brand:#1d3b78; --soft:#f2f5fa; --good:#1f9d57; --bad:#d6453d; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#1F2224; --txt:#EDEBE5; --muted:#9C9A92; --line:#33363A; --brand:#7FB4D4; --soft:#26292B; --good:#4cc283; --bad:#ef7a73; } }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
+  h3{font-size:14px;margin:0 0 8px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{background:var(--soft);border:1px solid var(--line);color:var(--txt);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600}
+  .btn:hover{background:var(--line)} .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)} .btn[hidden]{display:none}
+  .status{font-size:12.5px;color:var(--muted)} .status.ok{color:var(--good)} .status.err{color:var(--bad)}
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px;align-items:end}
+  .filters label.l{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+  select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--txt);font-size:13px}
+  .chk{display:flex;align-items:center;gap:6px;font-size:12.5px} .chk input{width:auto}
+  .layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:14px}
+  @media(max-width:900px){.layout{grid-template-columns:1fr}}
+  #map{height:600px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+  .card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .scroll{overflow-y:auto;max-height:560px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:5px 7px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);position:sticky;top:0;background:var(--soft)}
+  td.n,th.n{text-align:right;white-space:nowrap}
+  tr.click{cursor:pointer} tr.click:hover{background:rgba(29,59,120,.07)}
+  .bar{height:7px;border-radius:4px;background:var(--line);overflow:hidden;min-width:60px} .bar i{display:block;height:100%}
+  .legend{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);margin:8px 0 0}
+  .legend i{display:inline-block;width:160px;height:10px;border-radius:5px;background:linear-gradient(90deg,#ffe28a,#f6a13b,#e0452b,#8c1b3a)}
+  .hint{font-size:11.5px;color:var(--muted);margin:8px 0 0}
+  .cityLbl{background:rgba(255,255,255,.92);border:1px solid #1d3b78;border-radius:6px;color:#1b2a47;font-weight:700;font-size:11px;padding:1px 5px}
+</style>
+</head>
+<body>
+
+<div class="row">
+  <button class="btn primary" id="msConnect">🔐 Conectar con SharePoint (en vivo)</button>
+  <button class="btn" id="msRefresh" hidden>🔄 Actualizar</button>
+  <label class="btn" style="margin:0">📂 Cargar Excel manual<input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" hidden></label>
+  <span class="status" id="status">Sin datos todavía. Conecta con SharePoint para leer el archivo de Hardware (hoja BBDD).</span>
+  <span class="status" id="msUser"></span>
+</div>
+
+<div id="app" hidden>
+  <div class="filters">
+    <div><label class="l">Qué mostrar</label><select id="fMet"></select></div>
+    <div><label class="l">Zona</label><select id="fZona"></select></div>
+    <div><label class="l">Canal</label><select id="fCanal"></select></div>
+    <div><label class="l">Cadena</label><select id="fCadena"></select></div>
+    <div><label class="chk"><input type="checkbox" id="oHeat" checked> Mapa de calor</label><label class="chk"><input type="checkbox" id="oBub" checked> Burbujas por ciudad</label><label class="chk"><input type="checkbox" id="oLog"> Escala log (resalta provincias)</label></div>
+  </div>
+  <div class="layout">
+    <div><div id="map"></div>
+      <div class="legend">Menos <i></i> Más <span id="legTxt"></span></div>
+      <p class="hint" id="geoHint"></p></div>
+    <div class="card"><h3>Ranking por ciudad <span class="status" id="rkHint"></span></h3><div class="scroll"><table id="rank"></table></div></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="hw-data.js"></script>
+<script>
+(function(){
+"use strict";
+var $ = function(id){ return document.getElementById(id); }, esc = HW.esc, ALL = [], map = null, heat = null, bub = null, ITEM = null, firstDraw = true;
+var nf = function(n){ return Number(n).toLocaleString("es-PE"); };
+var RAMP = ["#ffe28a","#f6a13b","#e0452b","#8c1b3a"];
+function ramp(t){ t=Math.max(0,Math.min(1,t)); var i=Math.min(RAMP.length-2,Math.floor(t*(RAMP.length-1))), f=t*(RAMP.length-1)-i, a=hex(RAMP[i]), b=hex(RAMP[i+1]); return "rgb("+a.map(function(x,k){return Math.round(x+(b[k]-x)*f);}).join(",")+")"; }
+function hex(h){ return [1,3,5].map(function(i){ return parseInt(h.substr(i,2),16); }); }
+
+/* ═══ Qué mostrar: PDV, total de activos, una categoría o un modelo concreto ═══ */
+var CATS = {"Cigarrera":"Cigarreras","Dispenser":"Dispensers","Glorificador":"Glorificadores","Volumétrico":"Volumétricos","TV":"TV","Espejo":"Espejos"};
+function buildMetrics(){
+  var el=$("fMet"), cur=el.value, act=HW.byActivo(ALL), html='<option value="pdv">PDV (puntos de venta)</option><option value="total">Todos los activos</option>'+
+    '<optgroup label="Por categoría">'+Object.keys(CATS).map(function(c){ return '<option value="cat:'+esc(c)+'">'+CATS[c]+'</option>'; }).join("")+'</optgroup>';
+  Object.keys(CATS).forEach(function(c){ var l=act.filter(function(a){return a.cat===c;}).sort(function(a,b){return b.units-a.units;}); if(l.length>1) html+='<optgroup label="'+CATS[c]+' · por modelo">'+l.map(function(a){ return '<option value="act:'+esc(a.cat+"|"+a.act)+'">'+esc(a.act)+' ('+nf(a.units)+')</option>'; }).join("")+'</optgroup>'; });
+  el.innerHTML=html; if(cur && el.querySelector('option[value="'+cur.replace(/"/g,'\\"')+'"]')) el.value=cur;
+}
+function weight(r, m){
+  if(m==="pdv") return 1; if(m==="total") return r.u.total;
+  if(m.indexOf("cat:")===0){ var c=m.slice(4); return r.assets.reduce(function(s,a){ return s+(a.cat===c?a.n:0); },0); }
+  var k=m.slice(4); return r.assets.reduce(function(s,a){ return s+((a.cat+"|"+a.act)===k?a.n:0); },0);
+}
+var FILT=[["fZona","zona","Todas"],["fCanal","canal","Todos"],["fCadena","cadena","Todas"]];
+function buildFilters(){ FILT.forEach(function(f){ var el=$(f[0]), cur=el.value, s={}; ALL.forEach(function(r){ s[r[f[1]]]=1; }); var v=Object.keys(s).sort(); el.innerHTML='<option value="">'+f[2]+'</option>'+v.map(function(x){return '<option>'+esc(x)+'</option>';}).join(""); if(cur&&v.indexOf(cur)>=0) el.value=cur; }); }
+function filtered(){ return ALL.filter(function(r){ return FILT.every(function(f){ var v=$(f[0]).value; return !v||r[f[1]]===v; }); }); }
+
+/* ═══ Mapa ═══ */
+function ensureMap(){
+  if(map) return;
+  map=L.map("map",{zoomControl:true,minZoom:4,maxZoom:12}).setView([-9.4,-75.2],5);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:18}).addTo(map);
+  if(window.ResizeObserver) new ResizeObserver(function(){ map.invalidateSize(); }).observe($("map"));   // el contenedor cambia de tamaño con la ventana / el iframe
+}
+function draw(){
+  var m=$("fMet").value, rows=filtered(), pts=[], byCity={}, exact=0, withGeo=0, noGeo=0, tot=0;
+  rows.forEach(function(r){
+    var w=weight(r,m); if(w<=0) return; tot+=w;
+    var c=byCity[r.ciudad]||(byCity[r.ciudad]={k:r.ciudad,v:0,pdv:0,la:0,lo:0,n:0}); c.v+=w; c.pdv++;
+    if(r.geo){ withGeo++; if(r.geoExacta) exact++; c.la+=r.geo[0]; c.lo+=r.geo[1]; c.n++; pts.push([r.geo[0],r.geo[1],w]); } else noGeo++;
+  });
+  var cities=Object.keys(byCity).map(function(k){return byCity[k];}).sort(function(a,b){return b.v-a.v;}), maxV=cities.length?cities[0].v:1, log=$("oLog").checked;
+  var t=function(v){ return log ? Math.log(1+v)/Math.log(1+maxV) : v/maxV; };
+  ensureMap();
+  if(heat){ map.removeLayer(heat); heat=null; } if(bub){ map.removeLayer(bub); bub=null; }
+  if($("oHeat").checked && pts.length){
+    var mw=pts.reduce(function(s,p){return Math.max(s,p[2]);},1), scale=function(w){ return log ? Math.log(1+w)/Math.log(1+mw) : w/mw; };
+    heat=L.heatLayer(pts.map(function(p){ return [p[0],p[1],0.35+0.65*scale(p[2])]; }),{radius:16,blur:20,maxZoom:8,max:log?3:6,minOpacity:.25,gradient:{0.2:"#ffe28a",0.5:"#f6a13b",0.75:"#e0452b",1:"#8c1b3a"}}).addTo(map);
+  }
+  if($("oBub").checked){
+    bub=L.layerGroup();
+    cities.forEach(function(c){
+      var pos = HW.CITY[c.k] || (c.n ? [c.la/c.n,c.lo/c.n] : null); if(!pos) return;
+      var f=t(c.v), mk=L.circleMarker(pos,{radius:6+26*Math.sqrt(f),color:"#1d3b78",weight:1.5,fillColor:ramp(f),fillOpacity:.55}).bindTooltip("<b>"+esc(c.k)+"</b><br>"+nf(c.v)+" · "+nf(c.pdv)+" PDV",{direction:"top"});
+      mk.addTo(bub); if(c.v>=maxV*0.04) L.marker(pos,{interactive:false,icon:L.divIcon({className:"",html:'<span class="cityLbl">'+esc(c.k.charAt(0)+c.k.slice(1).toLowerCase())+" "+nf(c.v)+"</span>",iconSize:[0,0],iconAnchor:[-12,8]})}).addTo(bub);
+    });
+    bub.addTo(map);
+  }
+  var opt=$("fMet").selectedOptions[0], label=opt?opt.text.replace(/\s*\(\d[\d.,\s]*\)$/,""):"";
+  $("legTxt").textContent="· "+label+": "+nf(tot)+" en total";
+  $("geoHint").textContent=nf(exact)+" de "+nf(withGeo)+" puntos tienen coordenadas válidas en el Excel; el resto ("+nf(withGeo-exact)+") se ubica en el centro de su ciudad."+(noGeo>0?" "+nf(noGeo)+" PDV sin coordenadas ni ciudad reconocida no se dibujan.":"");
+  $("rkHint").textContent="· "+cities.length+" ciudades";
+  $("rank").innerHTML='<tr><th>Ciudad</th><th class="n">Valor</th><th class="n">PDV</th><th style="width:90px"></th></tr>'+cities.map(function(c){ return '<tr class="click" data-k="'+esc(c.k)+'"><td>'+esc(c.k)+'</td><td class="n">'+nf(c.v)+'</td><td class="n">'+nf(c.pdv)+'</td><td><div class="bar"><i style="width:'+(t(c.v)*100)+'%;background:'+ramp(t(c.v))+'"></i></div></td></tr>'; }).join("");
+  Array.prototype.forEach.call($("rank").querySelectorAll("tr.click"),function(tr){ tr.onclick=function(){ var p=HW.CITY[tr.dataset.k]; if(p) map.flyTo(p,tr.dataset.k==="LIMA"?10:9); }; });
+  postH();
+}
+["fMet","fZona","fCanal","fCadena","oHeat","oBub","oLog"].forEach(function(id){ $(id).onchange=draw; });
+
+/* ═══ Carga ═══ */
+function onData(res,label){
+  ALL=res.rows; $("app").hidden=false; buildMetrics(); buildFilters(); draw();
+  setTimeout(function(){ map.invalidateSize(); },50);
+  var st=$("status"); st.className="status ok"; st.textContent="✓ "+nf(ALL.length)+" PDV · "+label;
+}
+function setSt(t,cls){ var s=$("status"); s.textContent=t; s.className="status"+(cls?" "+cls:""); }
+function fail(e){ setSt("⚠ "+HW.errorMsg(e),"err"); }
+function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
+window.addEventListener("resize",postH);
+$("fileInput").onchange=function(e){ var f=e.target.files[0]; if(!f) return; setSt("Leyendo "+f.name+"…"); f.arrayBuffer().then(function(b){ onData(HW.parseBook(b),f.name); }).catch(fail); };
+var busy=false;
+function loadLive(silent){
+  if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y buscando el archivo de Hardware…");
+  var t;
+  HW.auth.token(!silent).then(function(tk){ t=tk; return HW.graph.findFile(t); })
+  .then(function(item){ ITEM=item; setSt("Descargando "+item.name+" ("+(item.size/1048576).toFixed(1)+" MB)…"); return HW.graph.download(t,item); })
+  .then(function(buf){ setSt("Procesando hoja BBDD…"); onData(HW.parseBook(buf),ITEM.name+" · SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false; })
+  .catch(function(err){ var m=(err&&err.message)||""; if(silent && (m==="no-account"||m==="silent-failed")) return; fail(err); })
+  .finally(function(){ busy=false; });
+}
+$("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
+HW.auth.init(function(u){ $("msUser").textContent=u; }).then(function(has){ if(!has){ if(typeof msal==="undefined") $("msConnect").hidden=true; return; } loadLive(true); });
+postH();
+})();
+</script>
+</body>
+</html>

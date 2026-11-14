@@ -21,6 +21,12 @@ window.SITE = {
     { id: 'planificador', seccion: 'Merch', icono: '🗓️', titulo: 'Planificador',
       sub: 'Planning semanal de los merchs: Lima (una hoja por día) y provincia KC (una hoja por semana). Por merch o por día, con detalle de cada tienda.',
       src: 'planificador.html' },
+    { id: 'hardware', seccion: 'Hardware', icono: '🧰', titulo: 'Hardware',
+      sub: 'Resumen de activos en los puntos de venta: por ciudad, cadena, zona y comunicación, cantidad de cada activo y comparación entre cortes del archivo.',
+      src: 'hardware.html' },
+    { id: 'mapa-activos', seccion: 'Hardware', icono: '🗺️', titulo: 'Mapa de activos',
+      sub: 'Mapa de calor del Perú con los activos (PDV, cigarreras, dispensers, glorificadores, TV o un modelo concreto), por ciudad.',
+      src: 'mapa-activos.html' },
     { id: 'inicio', seccion: 'Merch', icono: '🏠', titulo: 'Inicio',
       sub: 'Espacio de Merch de BAT 360. Aquí se irán sumando las vistas.',
       src: 'inicio.html' }
