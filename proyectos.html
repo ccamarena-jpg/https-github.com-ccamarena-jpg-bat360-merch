@@ -9,7 +9,7 @@
          --good:#1f9d57; --bad:#d6453d; --warn:#e0a100; --pend:#b8c2d6; }
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#1F2224; --txt:#EDEBE5; --muted:#9C9A92; --line:#33363A; --brand:#7FB4D4; --soft:#26292B; --good:#4cc283; --bad:#ef7a73; --warn:#f0c040; --pend:#5a6272; } }
   *{box-sizing:border-box}
-  body{margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
+  body{position:relative;margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
   h3{font-size:14px;margin:0 0 8px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .btn{background:var(--soft);border:1px solid var(--line);color:var(--txt);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600}
@@ -45,10 +45,11 @@
   .ph .tx span{color:var(--muted)}
   .hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
   .chk{display:flex;align-items:center;gap:6px;font-size:12.5px;margin-top:20px} .chk input{width:auto}
-  #lb{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  /* El sitio muestra esta página dentro de un iframe tan alto como el contenido: el visor se ancla al punto donde se tocó, no al centro de la pantalla. */
+  #lb{position:absolute;left:0;top:0;width:100%;background:rgba(0,0,0,.82);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:0 20px}
   #lb.on{display:flex}
-  #lbBox{background:var(--bg);border-radius:12px;max-width:920px;width:100%;max-height:94vh;overflow:auto;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
-  #lbBox .big{background:#111;display:flex;align-items:center;justify-content:center;min-height:260px} #lbBox .big img{max-width:100%;max-height:88vh;display:block}
+  #lbBox{background:var(--bg);border-radius:12px;max-width:920px;width:100%;overflow:hidden;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);margin-top:20px}
+  #lbBox .big{background:#111;display:flex;align-items:center;justify-content:center;min-height:260px} #lbBox .big img{max-width:100%;max-height:640px;display:block}
   #lbBox .inf{padding:16px;font-size:13px} #lbBox .inf h3{font-size:15px} #lbBox .inf p{margin:5px 0}
   #lbBox .inf .k{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;display:block}
   @media(max-width:700px){#lbBox{grid-template-columns:1fr}}
@@ -89,7 +90,7 @@
     <div style="overflow-x:auto"><table id="monthTable"></table></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="srcCard" hidden>
     <h3>Fuentes leídas <span class="status" id="srcCount"></span></h3>
     <div style="overflow-x:auto;max-height:260px;overflow-y:auto"><table id="srcTable"></table></div>
     <p class="hint">Cada Excel se lee tal cual lo actualiza tu equipo: se detectan solas las columnas (tienda, status, fecha, link de foto…). Si una carpeta aparece sin filas, su Excel no tiene columnas de tienda + status.</p>
@@ -305,18 +306,25 @@ function renderGallery(reset){
   var mb=$("moreBtn"); if(mb) mb.onclick=function(e){ e.preventDefault(); renderGallery(false); postH(); };
   postH();
 }
-$("gal").onclick=function(e){ var t=e.target.closest(".ph"); if(t) openLb(PHOTOS[+t.dataset.i]); };
-function openLb(r){
+$("gal").onclick=function(e){ var t=e.target.closest(".ph"); if(t) openLb(PHOTOS[+t.dataset.i],e); };
+function openLb(r,ev){
   if(!r) return;
   var big = r.link && isImg(r.link) ? '<img referrerpolicy="no-referrer" src="'+esc(r.link)+'" alt="">' : '<span style="color:#aaa">Sin vista previa'+(r.link?' · <a style="color:#9cf" target="_blank" rel="noopener noreferrer" href="'+esc(r.link)+'">abrir enlace</a>':"")+'</span>';
   var f=function(k,v){ return v?'<p><span class="k">'+k+'</span>'+esc(v)+'</p>':""; };
   $("lbBox").innerHTML='<div class="big">'+big+'</div><div class="inf"><h3>'+esc(r.tienda||"(sin tienda)")+'</h3><p><span class="chip '+r.res+'">'+RESL[r.res]+'</span></p>'+
     f("Proyecto",r.proyecto)+f("Cadena",r.cadena)+f("Distrito",r.distrito)+f("Código",r.codigo)+f("OT / detalle",r.ot)+f("Fecha",dstr(r.fProg))+f("Merch",r.merch)+f("Observaciones",r.obs)+
     (r.link?'<p><a target="_blank" rel="noopener noreferrer" href="'+esc(r.link)+'">Abrir foto original ↗</a></p>':"")+'</div>';
-  $("lb").classList.add("on");
+  placeLb(ev);
 }
-$("lb").onclick=function(e){ if(e.target===$("lb")) $("lb").classList.remove("on"); };
-document.addEventListener("keydown",function(e){ if(e.key==="Escape") $("lb").classList.remove("on"); });
+function placeLb(ev){
+  var lb=$("lb"), box=$("lbBox"), docH=document.documentElement.scrollHeight;
+  lb.style.height=docH+"px"; box.style.marginTop=Math.max(10,(ev&&ev.pageY!=null?ev.pageY:20)-60)+"px"; lb.classList.add("on");
+  var need=box.offsetTop+box.offsetHeight+40; if(need>docH) lb.style.height=need+"px";
+  postH();
+}
+function closeLb(){ $("lb").classList.remove("on"); $("lb").style.height=""; postH(); }
+$("lb").onclick=function(e){ if(e.target===$("lb")) closeLb(); };
+document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeLb(); });
 
 ["fProyecto","fCadena","fDistrito","fRes","fFoto","fSin","fDesde","fHasta"].forEach(function(id){ $(id).onchange=render; });
 /* elegir un mes limpia el rango manual (el rango, si existe, manda sobre el mes) */
@@ -406,6 +414,7 @@ function initMs(){
   }).catch(function(e){ console.warn("MSAL init:",e&&e.message); });
   $("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
 }
+if(/[?&]fuentes/.test(location.search)) $("srcCard").hidden=false;   // diagnóstico: añade ?fuentes a la URL
 initMs(); postH();
 })();
 </script>

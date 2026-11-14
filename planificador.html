@@ -9,7 +9,7 @@
          --good:#1f9d57; --bad:#d6453d; --warn:#e0a100; --lima:#1d3b78; --prov:#b4561c; }
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#1F2224; --txt:#EDEBE5; --muted:#9C9A92; --line:#33363A; --brand:#7FB4D4; --soft:#26292B; --good:#4cc283; --bad:#ef7a73; --warn:#f0c040; --lima:#7FB4D4; --prov:#e39a62; } }
   *{box-sizing:border-box}
-  body{margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
+  body{position:relative;margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
   h3{font-size:14px;margin:0 0 8px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .btn{background:var(--soft);border:1px solid var(--line);color:var(--txt);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600}
@@ -53,9 +53,10 @@
   .plain th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
   .hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
   .tag{font-size:10.5px;padding:1px 7px;border-radius:999px;background:rgba(224,161,0,.18);color:var(--warn);font-weight:600}
-  #lb{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  /* El sitio muestra esta página dentro de un iframe tan alto como el contenido: el modal no puede ir centrado en pantalla, se ancla al punto donde se tocó. */
+  #lb{position:absolute;left:0;top:0;width:100%;background:rgba(0,0,0,.55);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:0 20px}
   #lb.on{display:flex}
-  #lbBox{background:var(--bg);border-radius:12px;max-width:980px;width:100%;max-height:90vh;overflow:auto;padding:16px 18px}
+  #lbBox{background:var(--bg);border-radius:12px;max-width:980px;width:100%;padding:16px 18px;margin-top:20px}
   #lbBox h3{font-size:15px}
   a{color:var(--brand)}
 </style>
@@ -85,7 +86,7 @@
   <div class="card"><div class="scroll" id="board"></div>
     <p class="hint" id="boardHint"></p></div>
 
-  <div class="card">
+  <div class="card" id="srcCard" hidden>
     <h3>Fuentes leídas <span class="status" id="srcCount"></span></h3>
     <div class="scroll" style="max-height:220px;overflow-y:auto"><table class="plain" id="srcTable"></table></div>
     <p class="hint">Lima: una hoja por día (la fecha sale del nombre de la hoja; si una fila trae otra fecha se marca como reprogramada). Provincia (KC): una hoja por semana; el día sale de la columna DÍA y la semana del nombre de la hoja o del archivo (las fechas escritas ahí a veces traen el mes equivocado). «Martes - Sábado» o «Lunes/Martes» aparecen con borde punteado: son OT con ventana de varios días.</p>
@@ -287,14 +288,21 @@ function boardDia(list, keys, todayK){
   });
   $("board").innerHTML=html+'</div>';
 }
-$("board").onclick=function(e){ var t=e.target.closest("[data-c]"); if(!t||!t.dataset.c) return; var c=CELLS[t.dataset.c]; if(c) openLb(c); };
-function openLb(c){
+$("board").onclick=function(e){ var t=e.target.closest("[data-c]"); if(!t||!t.dataset.c) return; var c=CELLS[t.dataset.c]; if(c) openLb(c,e); };
+function openLb(c,ev){
   $("lbBox").innerHTML='<h3>'+esc(c.titulo)+' <span class="status">· '+c.items.length+' OT</span></h3><div class="scroll"><table class="plain"><tr><th>PDV</th><th>OT</th><th>Materiales</th><th>Distrito</th><th>Código</th><th>Observaciones</th></tr>'+
     c.items.map(function(e){ return '<tr><td>'+esc(e.pdv)+(e.multi?' <span class="tag">ventana</span>':'')+(e.reprog?' <span class="tag">reprogramada · era '+fmt(e.reprog)+'</span>':'')+'</td><td>'+esc(e.ot)+'</td><td>'+esc(e.mat||e.cig)+'</td><td>'+esc(e.distrito||e.ciudad)+'</td><td>'+esc(e.codigo)+'</td><td>'+esc(e.obs)+'</td></tr>'; }).join("")+'</table></div>';
-  $("lb").classList.add("on");
+  placeLb(ev);
 }
-$("lb").onclick=function(e){ if(e.target===$("lb")) $("lb").classList.remove("on"); };
-document.addEventListener("keydown",function(e){ if(e.key==="Escape") $("lb").classList.remove("on"); });
+function placeLb(ev){
+  var lb=$("lb"), box=$("lbBox"), docH=document.documentElement.scrollHeight;
+  lb.style.height=docH+"px"; box.style.marginTop=Math.max(10,(ev&&ev.pageY!=null?ev.pageY:20)-60)+"px"; lb.classList.add("on");
+  var need=box.offsetTop+box.offsetHeight+40; if(need>docH) lb.style.height=need+"px";
+  postH();
+}
+function closeLb(){ $("lb").classList.remove("on"); $("lb").style.height=""; postH(); }
+$("lb").onclick=function(e){ if(e.target===$("lb")) closeLb(); };
+document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeLb(); });
 function renderSources(){
   $("srcCount").textContent="· "+SOURCES.filter(function(s){return s.filas;}).length+" archivos con planning";
   $("srcTable").innerHTML='<tr><th>Zona</th><th>Archivo</th><th class="n">Hojas</th><th class="n">Filas</th><th>Nota</th></tr>'+SOURCES.map(function(s){
@@ -385,6 +393,7 @@ function initMs(){
   }).catch(function(e){ console.warn("MSAL init:",e&&e.message); });
   $("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
 }
+if(/[?&]fuentes/.test(location.search)) $("srcCard").hidden=false;   // diagnóstico: añade ?fuentes a la URL
 initMs(); postH();
 })();
 </script>
