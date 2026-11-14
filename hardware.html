@@ -78,7 +78,7 @@
 
   <div class="card">
     <h3>Histórico por cortes</h3>
-    <p class="hint" style="margin:0 0 10px">El Excel se sobrescribe en cada corte, pero SharePoint guarda las versiones anteriores del archivo. Elige dos cortes y compara: PDV nuevos, PDV que salieron y cuánto cambió cada activo. También puedes cargar a mano un Excel de un corte anterior.</p>
+    <p class="hint" style="margin:0 0 10px">Compara dos cortes del archivo de Hardware: PDV nuevos, PDV que salieron y cuánto cambió cada activo. Puedes elegir un <b>corte guardado</b> (se guardan en el Excel HW_CORTES), una <b>versión</b> que SharePoint aún conserve del archivo, o cargar a mano un Excel de un corte anterior.</p>
     <div class="cmp">
       <div><label>Corte anterior</label><select id="cA"></select></div>
       <div><label>Corte actual</label><select id="cB"></select></div>
@@ -88,6 +88,12 @@
     <span class="status" id="cmpStatus"></span>
     <div id="cmpOut"></div>
   </div>
+
+  <div class="card">
+    <h3>Cortes guardados <span class="status" id="saveStatus"></span></h3>
+    <div class="scroll" style="max-height:220px"><table id="savedTable"></table></div>
+    <p class="hint">Cada corte se guarda en el Excel <b>HW_CORTES.xlsx</b> con el script <code>bat-merch/tools/guardar_corte_hw.py</code>: detecta cuándo cambió el <i>contenido</i> del Excel de Hardware y agrega el corte (con el detalle por PDV). Esta vista solo lo lee.</p>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -96,7 +102,7 @@
 <script>
 (function(){
 "use strict";
-var $ = function(id){ return document.getElementById(id); }, esc = HW.esc, ALL = [], ITEM = null, VERS = [], dimKey = "ciudad", catSel = "", META = null;
+var $ = function(id){ return document.getElementById(id); }, esc = HW.esc, ALL = [], ITEM = null, VERS = [], dimKey = "ciudad", catSel = "", META = null, CUR = {corte:"",archivo:""}, SAVED = null, LOCAL = [];
 var nf = function(n){ return Number(n).toLocaleString("es-PE"); };
 var pct = function(a,b){ return b ? (Math.round(a*1000/b)/10)+"%" : "–"; };
 var dlt = function(n){ return n>0 ? '<span class="good">+'+nf(n)+'</span>' : n<0 ? '<span class="bad">'+nf(n)+'</span>' : '<span class="status">0</span>'; };
@@ -151,15 +157,15 @@ $("actSearch").oninput=function(){ renderAct(filtered()); postH(); };
 $("actCsv").onclick=function(){ csv("hardware_activos.csv",["Categoría","Activo","PDV","Unidades"],(window.__actList||[]).map(function(a){return [a.cat,a.act,a.pdv,a.units];})); };
 
 /* ═══ Carga ═══ */
-function onData(res,label){
-  ALL=res.rows; META=res.meta; $("app").hidden=false; buildFilters(); buildTabs(); render();
+function onData(res,label,cur){
+  ALL=res.rows; META=res.meta; CUR=cur||CUR; $("app").hidden=false; buildFilters(); buildTabs(); render();
   var st=$("status"); st.className="status ok"; st.textContent="✓ "+nf(ALL.length)+" PDV · "+label;
 }
 function setSt(t,cls){ var s=$("status"); s.textContent=t; s.className="status"+(cls?" "+cls:""); }
 function fail(e){ setSt("⚠ "+HW.errorMsg(e),"err"); }
 function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
 window.addEventListener("resize",postH);
-$("fileInput").onchange=function(e){ var f=e.target.files[0]; if(!f) return; setSt("Leyendo "+f.name+"…"); f.arrayBuffer().then(function(b){ onData(HW.parseBook(b),f.name); }).catch(fail); };
+$("fileInput").onchange=function(e){ var f=e.target.files[0]; if(!f) return; setSt("Leyendo "+f.name+"…"); f.arrayBuffer().then(function(b){ onData(HW.parseBook(b),f.name,{corte:new Date(f.lastModified).toISOString().slice(0,16),archivo:f.name}); if(typeof fillSources==="function") fillSources(); }).catch(fail); };
 
 var busy=false;
 function loadLive(silent){
@@ -167,46 +173,70 @@ function loadLive(silent){
   var t;
   HW.auth.token(!silent).then(function(tk){ t=tk; return HW.graph.findFile(t); })
   .then(function(item){ ITEM=item; setSt("Descargando "+item.name+" ("+(item.size/1048576).toFixed(1)+" MB)…"); return HW.graph.download(t,item); })
-  .then(function(buf){ setSt("Procesando hoja BBDD…"); var res=HW.parseBook(buf); onData(res,ITEM.name+" · SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false; return loadVersions(t); })
+  .then(function(buf){ setSt("Procesando hoja BBDD…"); var res=HW.parseBook(buf); onData(res,ITEM.name+" · SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"}),{corte:ITEM.lastModifiedDateTime,archivo:ITEM.name}); $("msRefresh").hidden=false; return Promise.all([loadVersions(t),loadSaved(t)]).then(fillSources); })
   .catch(function(err){ var m=(err&&err.message)||""; if(silent && (m==="no-account"||m==="silent-failed")) return; fail(err); })
   .finally(function(){ busy=false; });
 }
 $("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
 HW.auth.init(function(u){ $("msUser").textContent=u; }).then(function(has){ if(!has) { if(typeof msal==="undefined") $("msConnect").hidden=true; return; } loadLive(true); });
 
-/* ═══ Cortes: versiones del archivo en SharePoint ═══ */
-function fdt(s){ var d=new Date(s); return d.toLocaleDateString("es-PE",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"}); }
-function loadVersions(t){
-  return HW.graph.versions(t,ITEM).then(function(v){
-    VERS=v; var opt=function(x,i){ return '<option value="'+esc(x.id)+'">'+fdt(x.fecha)+' · '+(x.size/1048576).toFixed(1)+' MB'+(x.por?' · '+esc(x.por):'')+(i===0?' (vigente)':'')+'</option>'; };
-    $("cB").innerHTML=v.map(opt).join(""); $("cA").innerHTML=v.map(opt).join("");
-    /* corte anterior por defecto: la versión más cercana a 14 días antes de la vigente */
-    var ref=new Date(v[0].fecha).getTime()-14*864e5, best=v[v.length-1], bd=1e18;
-    v.slice(1).forEach(function(x){ var d=Math.abs(new Date(x.fecha).getTime()-ref); if(d<bd){ bd=d; best=x; } });
-    $("cA").value=(v.length>1?best:v[0]).id; $("cB").value=v[0].id;
-    $("cmpStatus").textContent=v.length+" versiones guardadas en SharePoint.";
-  }).catch(function(e){ VERS=[]; $("cmpStatus").textContent="No pude leer las versiones del archivo ("+HW.errorMsg(e)+"). Usa «Excel de un corte anterior»."; });
+/* ═══ Cortes: guardados (HW_CORTES.xlsx) + versiones de SharePoint + Excel cargados a mano ═══ */
+function fdt(s){ var d=new Date(s); return isNaN(d) ? String(s) : d.toLocaleDateString("es-PE",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"}); }
+function snapNow(){ return HW.snapshot(ALL,CUR); }
+function loadVersions(t){ return HW.graph.versions(t,ITEM).then(function(v){ VERS=v; }).catch(function(){ VERS=[]; }); }
+function loadSaved(t){
+  return HW.graph.cortes(t).then(function(c){ SAVED=c; renderSaved(); })
+    .catch(function(e){ SAVED=null; $("saveStatus").textContent="· no pude leer HW_CORTES.xlsx ("+HW.errorMsg(e)+"). Si no es tu archivo, pide que lo compartan contigo."; renderSaved(); });
 }
-$("cmpBtn").onclick=function(){
-  if(!ITEM||!VERS.length){ $("cmpStatus").textContent="Conecta con SharePoint primero (o carga un Excel anterior)."; return; }
-  var a=$("cA").value, b=$("cB").value; if(a===b){ $("cmpStatus").textContent="Elige dos cortes distintos."; return; }
-  $("cmpStatus").textContent="Descargando los dos cortes…";
-  HW.auth.token(true).then(function(t){
-    var dl=function(id){ return HW.graph.download(t,ITEM,id).then(function(buf){ return HW.parseBook(buf).rows; }); };
-    return Promise.all([dl(a),dl(b)]);
-  }).then(function(r){ var ta=VERS.filter(function(x){return x.id===a;})[0], tb=VERS.filter(function(x){return x.id===b;})[0]; showCmp(HW.compare(r[0],r[1]),"Corte del "+fdt(ta.fecha),"Corte del "+fdt(tb.fecha)); $("cmpStatus").textContent=""; })
-  .catch(function(e){ $("cmpStatus").textContent="⚠ "+HW.errorMsg(e); });
-};
+function renderSaved(){
+  var l=SAVED?SAVED.lista:[];
+  if(SAVED) $("saveStatus").textContent="· "+l.length+" corte"+(l.length===1?"":"s")+" guardado"+(l.length===1?"":"s");
+  $("savedTable").innerHTML='<tr><th>Corte</th><th>Archivo</th><th class="n">PDV</th><th class="n">Cigarreras</th><th class="n">Dispensers</th><th class="n">Total activos</th><th>Guardado el</th></tr>'+
+    (l.length ? l.map(function(c){ return '<tr><td>'+fdt(c.id)+'</td><td>'+esc(c.archivo)+'</td><td class="n">'+nf(c.pdv)+'</td><td class="n">'+nf(c.tot.cig)+'</td><td class="n">'+nf(c.tot.disp)+'</td><td class="n">'+nf(c.activos)+'</td><td>'+fdt(c.guardado)+'</td></tr>'; }).join("")
+      : '<tr><td colspan="7" class="status">'+(SAVED?"Todavía no hay cortes guardados.":"Conecta con SharePoint para ver los cortes guardados.")+'</td></tr>');
+  postH();
+}
+function sources(){
+  var S=[{key:"cur",grp:"",label:"Actual · "+(CUR.archivo||"corte cargado"),date:CUR.corte,get:function(){ return Promise.resolve(snapNow()); }}];
+  if(SAVED) SAVED.lista.forEach(function(c){ S.push({key:"c:"+c.id,grp:"Cortes guardados",label:fdt(c.id)+" · "+nf(c.pdv)+" PDV · "+nf(c.activos)+" activos",date:c.id,get:function(){ return SAVED.get(c.id); }}); });
+  VERS.forEach(function(v,i){ S.push({key:"v:"+v.id,grp:"Versiones en SharePoint",label:fdt(v.fecha)+" · "+(v.size/1048576).toFixed(1)+" MB"+(i===0?" (vigente)":""),date:v.fecha,
+    get:function(){ return HW.auth.token(true).then(function(t){ return HW.graph.download(t,ITEM,v.id); }).then(function(buf){ return HW.snapshot(HW.parseBook(buf).rows,{corte:v.fecha,archivo:ITEM.name+" (versión)"}); }); }}); });
+  LOCAL.forEach(function(l,i){ S.push({key:"l:"+i,grp:"Excel cargados",label:l.archivo+" · "+fdt(l.corte),date:l.corte,get:function(){ return Promise.resolve(l); }}); });
+  return S;
+}
+function fillSources(){
+  var S=sources(), a=$("cA").value, b=$("cB").value;
+  var opts=function(){ var g={}; S.forEach(function(x){ (g[x.grp]=g[x.grp]||[]).push(x); }); return Object.keys(g).map(function(k){ var o=g[k].map(function(x){ return '<option value="'+esc(x.key)+'">'+esc(x.label)+'</option>'; }).join(""); return k?'<optgroup label="'+esc(k)+'">'+o+'</optgroup>':o; }).join(""); };
+  $("cA").innerHTML=opts(); $("cB").innerHTML=opts();
+  var has=function(k){ return S.some(function(x){return x.key===k;}); };
+  $("cB").value = b && has(b) ? b : "cur";
+  if(a && a!=="cur" && has(a)) $("cA").value=a;
+  else {                                      // corte anterior por defecto: el más cercano a 14 días antes del actual
+    var ref=(CUR.corte?new Date(CUR.corte).getTime():Date.now())-14*864e5, best=null, bd=1e18;
+    S.forEach(function(x){ if(x.key==="cur") return; var d=Math.abs(new Date(x.date).getTime()-ref); if(d<bd){ bd=d; best=x; } });
+    $("cA").value = best ? best.key : "cur";
+  }
+  $("cmpStatus").textContent = S.length>1 ? "" : "Todavía no hay otro corte para comparar: espera al próximo corte, o carga a mano un Excel anterior.";
+}
+function runCmp(){
+  if(!ALL.length){ $("cmpStatus").textContent="Primero conecta con SharePoint o carga el Excel actual."; return; }
+  var S=sources(), find=function(k){ return S.filter(function(x){return x.key===k;})[0]; }, A=find($("cA").value), B=find($("cB").value);
+  if(!A||!B||A.key===B.key){ $("cmpStatus").textContent="Elige dos cortes distintos."; return; }
+  $("cmpStatus").textContent="Preparando los dos cortes…";
+  Promise.all([A.get(),B.get()]).then(function(r){ showCmp(HW.compareSnaps(r[0],r[1]),A.label,B.label); $("cmpStatus").textContent=""; })
+    .catch(function(e){ $("cmpStatus").textContent="⚠ "+HW.errorMsg(e); });
+}
+$("cmpBtn").onclick=runCmp;
 $("oldFile").onchange=function(e){
-  var f=e.target.files[0]; if(!f) return; if(!ALL.length){ $("cmpStatus").textContent="Primero carga o conecta el corte actual."; return; }
-  $("cmpStatus").textContent="Leyendo "+f.name+"…";
-  f.arrayBuffer().then(function(b){ var old=HW.parseBook(b).rows; showCmp(HW.compare(old,ALL),f.name,"Corte actual (cargado)"); $("cmpStatus").textContent=""; }).catch(function(err){ $("cmpStatus").textContent="⚠ "+HW.errorMsg(err); });
+  var f=e.target.files[0]; if(!f) return; $("cmpStatus").textContent="Leyendo "+f.name+"…";
+  f.arrayBuffer().then(function(b){ var sn=HW.snapshot(HW.parseBook(b).rows,{corte:new Date(f.lastModified).toISOString().slice(0,16),archivo:f.name}); LOCAL.push(sn); fillSources(); $("cA").value="l:"+(LOCAL.length-1); runCmp(); })
+    .catch(function(err){ $("cmpStatus").textContent="⚠ "+HW.errorMsg(err); });
 };
 function showCmp(c,la,lb){
   var ta=c.totA, tb=c.totB, k=function(l,a,b){ return '<div class="kpi"><b>'+nf(b)+'</b><span>'+l+'</span><small>'+dlt(b-a)+' <span class="status">vs '+nf(a)+'</span></small></div>'; };
   var dt=function(title,list,key){ return '<div><h3>'+title+'</h3><div class="scroll" style="max-height:340px"><table><tr><th>'+esc(key)+'</th><th class="n">PDV antes</th><th class="n">PDV ahora</th><th class="n">Δ PDV</th><th class="n">Activos antes</th><th class="n">Activos ahora</th><th class="n">Δ activos</th></tr>'+
-    list.filter(function(o){return o.pdvD||o.totD;}).map(function(o){ return '<tr><td>'+esc(o.k)+'</td><td class="n">'+nf(o.pdvA)+'</td><td class="n">'+nf(o.pdvB)+'</td><td class="n">'+dlt(o.pdvD)+'</td><td class="n">'+nf(o.totA)+'</td><td class="n">'+nf(o.totB)+'</td><td class="n">'+dlt(o.totD)+'</td></tr>'; }).join("")+'</table></div></div>'; };
-  var pdvT=function(list,max){ return '<div class="scroll" style="max-height:300px"><table><tr><th>ID STORE</th><th>POS</th><th>Ciudad</th><th>Cadena</th><th class="n">Activos</th></tr>'+list.slice(0,max).map(function(r){ return '<tr><td>'+esc(r.id)+'</td><td>'+esc(r.pos)+'</td><td>'+esc(r.ciudad)+'</td><td>'+esc(r.cadena)+'</td><td class="n">'+r.u.total+'</td></tr>'; }).join("")+'</table></div>'+(list.length>max?'<p class="hint">Mostrando '+max+' de '+nf(list.length)+'. Exporta el CSV para ver todos.</p>':''); };
+    (list.filter(function(o){return o.pdvD||o.totD;}).map(function(o){ return '<tr><td>'+esc(o.k)+'</td><td class="n">'+nf(o.pdvA)+'</td><td class="n">'+nf(o.pdvB)+'</td><td class="n">'+dlt(o.pdvD)+'</td><td class="n">'+nf(o.totA)+'</td><td class="n">'+nf(o.totB)+'</td><td class="n">'+dlt(o.totD)+'</td></tr>'; }).join("")||'<tr><td colspan="7" class="status">Sin cambios.</td></tr>')+'</table></div></div>'; };
+  var pdvT=function(list,max){ return '<div class="scroll" style="max-height:300px"><table><tr><th>ID STORE</th><th>POS</th><th>Ciudad</th><th>Cadena</th><th class="n">Activos</th></tr>'+(list.slice(0,max).map(function(r){ return '<tr><td>'+esc(r.id)+'</td><td>'+esc(r.pos)+'</td><td>'+esc(r.ciudad)+'</td><td>'+esc(r.cadena)+'</td><td class="n">'+r.total+'</td></tr>'; }).join("")||'<tr><td colspan="5" class="status">Ninguno.</td></tr>')+'</table></div>'+(list.length>max?'<p class="hint">Mostrando '+max+' de '+nf(list.length)+'. Exporta el CSV para ver todos.</p>':''); };
   $("cmpOut").innerHTML='<p style="margin:12px 0 8px"><b>'+esc(la)+'</b> → <b>'+esc(lb)+'</b></p>'+
     '<div class="kpis">'+k("PDV",ta.pdv,tb.pdv)+k("Cigarreras",ta.cig,tb.cig)+k("Dispensers",ta.disp,tb.disp)+k("Glorificadores",ta.glor,tb.glor)+k("TV",ta.tv,tb.tv)+k("Total activos",ta.total,tb.total)+'</div>'+
     '<div class="two">'+dt("Por ciudad",c.ciudad,"Ciudad")+dt("Por cadena",c.cadena,"Cadena")+'</div>'+
@@ -215,8 +245,8 @@ function showCmp(c,la,lb){
     '<div class="two" style="margin-top:14px"><div><h3>PDV nuevos <span class="status">· '+nf(c.nuevos.length)+'</span> <button class="btn" id="csvNew">⬇ CSV</button></h3>'+pdvT(c.nuevos,100)+'</div>'+
     '<div><h3>PDV que salieron <span class="status">· '+nf(c.salieron.length)+'</span> <button class="btn" id="csvOut">⬇ CSV</button></h3>'+pdvT(c.salieron,100)+'</div></div>'+
     '<h3 style="margin-top:14px">PDV con cambio de activos <span class="status">· '+nf(c.cambios.length)+' (mismo ID STORE, distinto hardware)</span></h3>'+
-    '<div class="scroll" style="max-height:300px"><table><tr><th>ID STORE</th><th>POS</th><th>Ciudad</th><th class="n">Antes</th><th class="n">Ahora</th></tr>'+c.cambios.slice(0,100).map(function(x){ return '<tr><td>'+esc(x.ahora.id)+'</td><td>'+esc(x.ahora.pos)+'</td><td>'+esc(x.ahora.ciudad)+'</td><td class="n">'+x.antes.u.total+'</td><td class="n">'+x.ahora.u.total+'</td></tr>'; }).join("")+'</table></div>';
-  var row=function(r){ return [r.id,r.pos,r.ciudad,r.cadena,r.zona,r.u.total]; };
+    '<div class="scroll" style="max-height:300px"><table><tr><th>ID STORE</th><th>POS</th><th>Ciudad</th><th class="n">Antes</th><th class="n">Ahora</th></tr>'+(c.cambios.slice(0,100).map(function(x){ return '<tr><td>'+esc(x.id)+'</td><td>'+esc(x.pos)+'</td><td>'+esc(x.ciudad)+'</td><td class="n">'+x.antes+'</td><td class="n">'+x.ahora+'</td></tr>'; }).join("")||'<tr><td colspan="5" class="status">Ninguno.</td></tr>')+'</table></div>';
+  var row=function(r){ return [r.id,r.pos,r.ciudad,r.cadena,r.zona,r.total]; };
   $("csvNew").onclick=function(){ csv("pdv_nuevos.csv",["ID STORE","POS","Ciudad","Cadena","Zona","Activos"],c.nuevos.map(row)); };
   $("csvOut").onclick=function(){ csv("pdv_salieron.csv",["ID STORE","POS","Ciudad","Cadena","Zona","Activos"],c.salieron.map(row)); };
   postH();

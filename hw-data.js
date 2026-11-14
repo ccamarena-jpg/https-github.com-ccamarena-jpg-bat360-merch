@@ -9,6 +9,8 @@ var CFG = {
   driveId:  "b!ftpx1PHMU02Xyd_BvRi5gZ4jKtzFMjZHt1vZTICVWd0sPgcGYMRfTZopqpx_5vTB",
   folderId: "015HP6ULJFS5ISEVNR5JC2CPNZJLQQB4NO",   // PLAN / PROYECTOS ACTUALES / HW  (el archivo se renombra en cada corte: se toma el más reciente)
   sheet:    "BBDD",
+  /* Excel histórico de cortes (lo escribe bat-merch/tools/guardar_corte_hw.py). Está en el OneDrive de Claudia: hay que compartirlo con quien use la vista. */
+  cortes:   { driveId: "b!NpQ7a93VQkOL-yt8XpCvELSu8zBzw0hChMPffAg5mBs_yxFrMcD7QKFa-_Ao0MIL", itemId: "01FD7R7ECU6CYHD6WMPJDZVQEFCEPJZ5IO" },
   maxQty:   10                                       // cantidades mayores se consideran error de digitación (se cuenta 1 y se avisa)
 };
 var G = "https://graph.microsoft.com/v1.0/drives/"+CFG.driveId;
@@ -98,21 +100,31 @@ function totals(rows){ var t={pdv:rows.length,cig:0,disp:0,glor:0,vol:0,tv:0,esp
   rows.forEach(function(r){ ["cig","disp","glor","vol","tv","esp","total"].forEach(function(f){ t[f]+=r.u[f]; }); t.ciudades[r.ciudad]=1; if(r.geoExacta) t.geoExacta++; if(norm(r.comodato)==="SI") t.comodato++; if(norm(r.viajero)==="SI") t.viajero++; });
   t.ciudades=Object.keys(t.ciudades).length; return t; }
 
-/* ═══ Comparar dos cortes: A (anterior) vs B (actual) ═══ */
+/* ═══ Cortes: un «snapshot» es el resumen de un corte (totales, indicadores, activos y una fila por PDV con su huella de hardware) ═══ */
+function hash(str){ var h=5381; for(var i=0;i<str.length;i++) h=((h<<5)+h+str.charCodeAt(i))|0; return (h>>>0).toString(36); }   // misma huella que tools/guardar_corte_hw.py
 function sig(r){ return r.assets.map(function(a){return a.cat+":"+a.act+"x"+a.n;}).sort().join("|"); }
-function compare(A, B){
-  var ma={}, mb={}; A.forEach(function(r){ ma[r.id]=r; }); B.forEach(function(r){ mb[r.id]=r; });
-  var nuevos=B.filter(function(r){return !ma[r.id];}), salieron=A.filter(function(r){return !mb[r.id];}), cambios=[];
-  B.forEach(function(r){ var a=ma[r.id]; if(a && sig(a)!==sig(r)) cambios.push({antes:a,ahora:r}); });
-  function delta(key){ var da={}, db={}; byDim(A,key).forEach(function(o){da[o.k]=o;}); byDim(B,key).forEach(function(o){db[o.k]=o;});
+function snapshot(rows, meta){
+  var dict={ciudad:[],cadena:[],zona:[]}, idx={ciudad:{},cadena:{},zona:{}}, pos={};
+  var di=function(k,v){ var m=idx[k]; if(m[v]==null){ m[v]=dict[k].length; dict[k].push(v); } return m[v]; };
+  var pdv=rows.map(function(r){ pos[r.id]=r.pos; return [r.id,di("ciudad",r.ciudad),di("cadena",r.cadena),di("zona",r.zona),hash(sig(r)),r.u.total]; });
+  return { corte:(meta&&meta.corte)||"", archivo:(meta&&meta.archivo)||"", tot:totals(rows), dims:{ciudad:byDim(rows,"ciudad"),cadena:byDim(rows,"cadena"),zona:byDim(rows,"zona")}, activos:byActivo(rows), dict:dict, pdv:pdv, pos:pos };
+}
+/* Compara dos snapshots: A (anterior) vs B (actual) */
+function compareSnaps(A, B){
+  var ma={}, mb={}; A.pdv.forEach(function(p){ ma[p[0]]=p; }); B.pdv.forEach(function(p){ mb[p[0]]=p; });
+  var info=function(S,p){ return {id:p[0],pos:(B.pos&&B.pos[p[0]])||(A.pos&&A.pos[p[0]])||"",ciudad:S.dict.ciudad[p[1]],cadena:S.dict.cadena[p[2]],zona:S.dict.zona[p[3]],total:p[5]}; };
+  var nuevos=B.pdv.filter(function(p){return !ma[p[0]];}).map(function(p){return info(B,p);});
+  var salieron=A.pdv.filter(function(p){return !mb[p[0]];}).map(function(p){return info(A,p);});
+  var cambios=B.pdv.filter(function(p){ return ma[p[0]] && ma[p[0]][4]!==p[4]; }).map(function(p){ var o=info(B,p); o.antes=ma[p[0]][5]; o.ahora=p[5]; return o; });
+  function delta(key){ var da={}, db={}; (A.dims[key]||[]).forEach(function(o){da[o.k]=o;}); (B.dims[key]||[]).forEach(function(o){db[o.k]=o;});
     var ks={}; Object.keys(da).concat(Object.keys(db)).forEach(function(k){ks[k]=1;});
     return Object.keys(ks).map(function(k){ var a=da[k]||{pdv:0,total:0}, b=db[k]||{pdv:0,total:0}; return {k:k,pdvA:a.pdv,pdvB:b.pdv,pdvD:b.pdv-a.pdv,totA:a.total,totB:b.total,totD:b.total-a.total}; })
       .sort(function(x,y){ return Math.abs(y.totD)+Math.abs(y.pdvD)-Math.abs(x.totD)-Math.abs(x.pdvD); }); }
-  var aa={}, ab={}; byActivo(A).forEach(function(o){aa[o.cat+"|"+o.act]=o;}); byActivo(B).forEach(function(o){ab[o.cat+"|"+o.act]=o;});
+  var aa={}, ab={}; A.activos.forEach(function(o){aa[o.cat+"|"+o.act]=o;}); B.activos.forEach(function(o){ab[o.cat+"|"+o.act]=o;});
   var ks={}; Object.keys(aa).concat(Object.keys(ab)).forEach(function(k){ks[k]=1;});
   var activos=Object.keys(ks).map(function(k){ var a=aa[k]||{units:0,pdv:0}, b=ab[k]||{units:0,pdv:0}, p=k.split("|"); return {cat:p[0],act:p[1],uA:a.units,uB:b.units,uD:b.units-a.units,pA:a.pdv,pB:b.pdv}; })
     .filter(function(x){return x.uD!==0||x.pA!==x.pB;}).sort(function(x,y){ return Math.abs(y.uD)-Math.abs(x.uD); });
-  return {totA:totals(A),totB:totals(B),nuevos:nuevos,salieron:salieron,cambios:cambios,ciudad:delta("ciudad"),cadena:delta("cadena"),zona:delta("zona"),activos:activos};
+  return {totA:A.tot,totB:B.tot,nuevos:nuevos,salieron:salieron,cambios:cambios,ciudad:delta("ciudad"),cadena:delta("cadena"),zona:delta("zona"),activos:activos};
 }
 
 /* ═══ Microsoft Graph + MSAL ═══ */
@@ -151,6 +163,29 @@ function versions(t,item){
     return (j.value||[]).map(function(v){ return {id:v.id,fecha:v.lastModifiedDateTime,size:v.size,por:(v.lastModifiedBy&&v.lastModifiedBy.user&&v.lastModifiedBy.user.displayName)||""}; })
       .sort(function(a,b){ return a.fecha<b.fecha?1:-1; }); });
 }
+/* Excel histórico de cortes: hojas Cortes / Resumen / Activos / PDV (ver tools/guardar_corte_hw.py). Devuelve {lista, get(id)→snapshot}. */
+function cortesLoad(t){
+  var c=CFG.cortes; if(!c||!c.itemId) return Promise.reject(new Error("No hay Excel de cortes configurado."));
+  return gfetch("https://graph.microsoft.com/v1.0/drives/"+c.driveId+"/items/"+c.itemId+"/content",t).then(function(r){return r.arrayBuffer();}).then(function(buf){
+    var wb=XLSX.read(buf,{type:"array"});
+    var rows=function(n){ return wb.Sheets[n] ? XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:""}).slice(1).filter(function(r){return r[0]!=="";}) : []; };
+    var cortes=rows("Cortes").map(function(r){ return {id:String(r[0]),archivo:String(r[1]),pdv:+r[2]||0,activos:+r[9]||0,tot:{pdv:+r[2]||0,cig:+r[3]||0,disp:+r[4]||0,glor:+r[5]||0,vol:+r[6]||0,tv:+r[7]||0,esp:+r[8]||0,total:+r[9]||0,ciudades:0},guardado:String(r[11]||"")}; })
+      .sort(function(a,b){ return a.id<b.id?1:-1; });
+    var resumen=rows("Resumen"), activos=rows("Activos"), pdv=rows("PDV");
+    function get(id){
+      var cut=cortes.filter(function(x){return x.id===id;})[0]; if(!cut) return Promise.reject(new Error("Corte no encontrado en el Excel de cortes."));
+      var dims={ciudad:[],cadena:[],zona:[]};
+      resumen.forEach(function(r){ if(String(r[0])===id && dims[r[1]]) dims[r[1]].push({k:String(r[2]),pdv:+r[3],cig:+r[4],disp:+r[5],glor:+r[6],vol:+r[7],tv:+r[8],esp:+r[9],total:+r[10]}); });
+      cut.tot.ciudades=dims.ciudad.length;
+      var act=[]; activos.forEach(function(r){ if(String(r[0])===id) act.push({cat:String(r[1]),act:String(r[2]),pdv:+r[3],units:+r[4]}); });
+      var dict={ciudad:[],cadena:[],zona:[]}, idx={ciudad:{},cadena:{},zona:{}}, pos={}, list=[];
+      var di=function(k,v){ var m=idx[k]; if(m[v]==null){ m[v]=dict[k].length; dict[k].push(v); } return m[v]; };
+      pdv.forEach(function(r){ if(String(r[0])!==id) return; var pid=String(r[1]); pos[pid]=String(r[2]); list.push([pid,di("ciudad",String(r[5])),di("cadena",String(r[6])),di("zona",String(r[3])),String(r[8]),+r[7]]); });
+      return Promise.resolve({corte:id,archivo:cut.archivo,tot:cut.tot,dims:dims,activos:act,dict:dict,pdv:list,pos:pos});
+    }
+    return {lista:cortes,get:get};
+  });
+}
 function errorMsg(err){
   var m=(err&&err.message)||String(err);
   if(m.indexOf("403")>=0) return "Tu cuenta no tiene acceso a la carpeta HW (403). Pide a acastro que te comparta PLAN/PROYECTOS ACTUALES/HW, o usa la carga manual.";
@@ -159,6 +194,6 @@ function errorMsg(err){
   if(m.indexOf("popup")>=0) return "El navegador bloqueó la ventana de inicio de sesión: permite ventanas emergentes para este sitio.";
   return m;
 }
-return { CFG:CFG, norm:norm, esc:esc, parseBook:parseBook, byDim:byDim, byActivo:byActivo, totals:totals, compare:compare, DIMS:DIMS, CITY:CITY,
-  auth:{init:initAuth,token:token}, graph:{findFile:findFile,download:download,versions:versions}, errorMsg:errorMsg };
+return { CFG:CFG, norm:norm, esc:esc, parseBook:parseBook, byDim:byDim, byActivo:byActivo, totals:totals, snapshot:snapshot, compareSnaps:compareSnaps, DIMS:DIMS, CITY:CITY,
+  auth:{init:initAuth,token:token}, graph:{findFile:findFile,download:download,versions:versions,cortes:cortesLoad}, errorMsg:errorMsg };
 })();
