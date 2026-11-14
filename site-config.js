@@ -18,6 +18,9 @@ window.SITE = {
     { id: 'proyectos', seccion: 'Merch', icono: '📸', titulo: 'Proyectos',
       sub: 'Avance de cada campaña con fotos de las tiendas. Excluye HW y Proyecto Interno (tienen vistas propias).',
       src: 'proyectos.html' },
+    { id: 'planificador', seccion: 'Merch', icono: '🗓️', titulo: 'Planificador',
+      sub: 'Planning semanal de los merchs: Lima (una hoja por día) y provincia KC (una hoja por semana). Por merch o por día, con detalle de cada tienda.',
+      src: 'planificador.html' },
     { id: 'inicio', seccion: 'Merch', icono: '🏠', titulo: 'Inicio',
       sub: 'Espacio de Merch de BAT 360. Aquí se irán sumando las vistas.',
       src: 'inicio.html' }

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planificador · BAT 360 Merch</title>
+<style>
+  :root{ --bg:#ffffff; --txt:#1b2a47; --muted:#6c7a92; --line:#dde4ee; --brand:#1d3b78; --soft:#f2f5fa;
+         --good:#1f9d57; --bad:#d6453d; --warn:#e0a100; --lima:#1d3b78; --prov:#b4561c; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#1F2224; --txt:#EDEBE5; --muted:#9C9A92; --line:#33363A; --brand:#7FB4D4; --soft:#26292B; --good:#4cc283; --bad:#ef7a73; --warn:#f0c040; --lima:#7FB4D4; --prov:#e39a62; } }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
+  h3{font-size:14px;margin:0 0 8px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{background:var(--soft);border:1px solid var(--line);color:var(--txt);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600}
+  .btn:hover{background:var(--line)} .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)} .btn[hidden]{display:none}
+  .btn.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .status{font-size:12.5px;color:var(--muted)} .status.ok{color:var(--good)} .status.err{color:var(--bad)}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:14px 0;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px}
+  .toolbar label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+  select,input[type=text]{padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--txt);font-size:13px;min-width:130px}
+  .wk{display:flex;align-items:center;gap:8px} .wk b{min-width:190px;text-align:center;font-size:14px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:10px;margin:0 0 16px}
+  .kpi{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .kpi b{display:block;font-size:24px;line-height:1.15} .kpi span{font-size:11.5px;color:var(--muted)}
+  .card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+  .scroll{overflow-x:auto}
+  table.grid{width:100%;border-collapse:separate;border-spacing:0;min-width:820px;table-layout:fixed}
+  .grid th,.grid td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:6px 8px;vertical-align:top;text-align:left}
+  .grid th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:var(--soft);position:sticky;top:0}
+  .grid th.today{color:var(--brand);box-shadow:inset 0 -3px 0 var(--brand)}
+  .grid th small{display:block;font-size:12px;color:var(--txt);text-transform:none;letter-spacing:0}
+  .grid td.who{width:170px;background:var(--soft);font-weight:600;font-size:12.5px}
+  .grid td.who small{display:block;font-weight:400;color:var(--muted);font-size:11px}
+  .grid td.cell{cursor:pointer;height:64px}
+  .grid td.cell:hover{background:rgba(29,59,120,.07)}
+  .grid td.today{background:rgba(29,59,120,.04)}
+  .z{display:inline-block;font-size:9.5px;font-weight:700;padding:0 6px;border-radius:999px;color:#fff;vertical-align:1px;margin-right:4px}
+  .z.LIMA{background:var(--lima)} .z.PROVINCIA{background:var(--prov)}
+  .n{display:inline-block;min-width:22px;text-align:center;font-weight:700;font-size:12px;border-radius:6px;padding:0 6px;background:var(--brand);color:#fff;margin-right:5px}
+  .n.multi{background:transparent;color:var(--brand);border:1px dashed var(--brand)}
+  .ot{font-size:11.5px;color:var(--muted);line-height:1.3;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ot.multi{font-style:italic}
+  .days{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+  .day{background:var(--bg);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .day h4{margin:0;padding:8px 10px;font-size:12.5px;background:var(--soft);border-bottom:1px solid var(--line)}
+  .day.today h4{background:var(--brand);color:#fff}
+  .day .it{padding:6px 10px;border-bottom:1px solid var(--line);font-size:12px;cursor:pointer} .day .it:hover{background:var(--soft)}
+  .day .it b{display:block;font-size:12px} .day .it span{color:var(--muted)}
+  .day .empty{padding:10px;color:var(--muted);font-size:12px}
+  table.plain{width:100%;border-collapse:collapse;font-size:12.5px}
+  .plain th,.plain td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  .plain th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+  .hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
+  .tag{font-size:10.5px;padding:1px 7px;border-radius:999px;background:rgba(224,161,0,.18);color:var(--warn);font-weight:600}
+  #lb{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  #lb.on{display:flex}
+  #lbBox{background:var(--bg);border-radius:12px;max-width:980px;width:100%;max-height:90vh;overflow:auto;padding:16px 18px}
+  #lbBox h3{font-size:15px}
+  a{color:var(--brand)}
+</style>
+</head>
+<body>
+
+<div class="row">
+  <button class="btn primary" id="msConnect">🔐 Conectar con SharePoint (en vivo)</button>
+  <button class="btn" id="msRefresh" hidden>🔄 Actualizar</button>
+  <label class="btn" style="margin:0">📂 Cargar Excel manual<input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" multiple hidden></label>
+  <span class="status" id="status">Sin datos todavía. Conecta con SharePoint para leer el planning de Lima y de provincia (KC).</span>
+  <span class="status" id="msUser"></span>
+</div>
+
+<div id="app" hidden>
+  <div class="toolbar">
+    <div class="wk"><button class="btn" id="prev">◀</button><b id="wkLbl"></b><button class="btn" id="next">▶</button><button class="btn" id="today">Hoy</button></div>
+    <div><label>Zona</label><select id="fZona"><option value="">Lima y provincia</option><option value="LIMA">Lima</option><option value="PROVINCIA">Provincia (KC)</option></select></div>
+    <div><label>Merch</label><select id="fMerch"></select></div>
+    <div><label>Cadena</label><select id="fCadena"></select></div>
+    <div><label>Buscar</label><input type="text" id="search" placeholder="PDV, OT, código, distrito…"></div>
+    <div><label>Vista</label><div class="row" style="gap:4px"><button class="btn on" id="vMerch">Por merch</button><button class="btn" id="vDia">Por día</button></div></div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card"><div class="scroll" id="board"></div>
+    <p class="hint" id="boardHint"></p></div>
+
+  <div class="card">
+    <h3>Fuentes leídas <span class="status" id="srcCount"></span></h3>
+    <div class="scroll" style="max-height:220px;overflow-y:auto"><table class="plain" id="srcTable"></table></div>
+    <p class="hint">Lima: una hoja por día (la fecha sale del nombre de la hoja; si una fila trae otra fecha se marca como reprogramada). Provincia (KC): una hoja por semana; el día sale de la columna DÍA y la semana del nombre de la hoja o del archivo (las fechas escritas ahí a veces traen el mes equivocado). «Martes - Sábado» o «Lunes/Martes» aparecen con borde punteado: son OT con ventana de varios días.</p>
+  </div>
+</div>
+
+<div id="lb"><div id="lbBox"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script>
+/* ═══ Config: planning de merchs en el OneDrive de acastro (carpeta PROYECTO INTERNO), vía Microsoft Graph ═══ */
+window.PLAN = {
+  clientId: "2dd44541-d3ac-459c-afa0-aa873590f7e0",
+  tenant:   "9d85a34e-57e5-4f82-9341-7dd9300077b7",
+  scopes:   ["Files.Read.All"],
+  driveId:  "b!ftpx1PHMU02Xyd_BvRi5gZ4jKtzFMjZHt1vZTICVWd0sPgcGYMRfTZopqpx_5vTB",
+  internoId:"015HP6ULN2WWREFL2KPNH2KB73WALNEZOT",   // PROYECTOS ACTUALES / PROYECTO INTERNO  (contiene LIMA y PROVINCIA)
+  year:     2026,   // año de las fechas sin año; en Lima el año se deduce del día de la semana de la hoja
+  semanasAtras: 12, semanasAdelante: 8   // solo se leen hojas de Lima dentro de esta ventana (el archivo tiene cientos)
+};
+
+(function(){
+"use strict";
+var CFG = window.PLAN, $ = function(id){ return document.getElementById(id); };
+var DIAS = ["LUNES","MARTES","MIERCOLES","JUEVES","VIERNES","SABADO","DOMINGO"], DIAL = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+var MESC = ["ene","feb","mar","abr","may","jun","jul","ago","set","oct","nov","dic"];
+var ALL = [], SOURCES = [], weekStart = null, mode = "merch", uid = 0;
+
+function norm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim().toUpperCase(); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+function pad(n){ return (n<10?"0":"")+n; }
+function key(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function wdi(d){ return (d.getDay()+6)%7; }                       // lunes = 0
+function addDays(d,n){ return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n); }
+function mondayOf(d){ return addDays(d,-wdi(d)); }
+function fmt(d){ return d.getDate()+" "+MESC[d.getMonth()]; }
+function asDate(v){
+  if(v instanceof Date && !isNaN(v)) return new Date(v.getFullYear(),v.getMonth(),v.getDate());
+  if(typeof v==="number" && v>20000 && v<80000){ var d=new Date(Math.round((v-25569)*86400000)); return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()); }
+  return null;
+}
+
+/* ═══ Columnas por nombre (los planning cambian de orden entre archivos/hojas) ═══ */
+var COLS = {
+  pdv:["NOMBRE DEL PDV","POS","TIENDA","PDV"], merch:["MERCH","MERCHANDISER"], ot:["OT","DETALLE DE OT"], codigo:["CODIGO TT AUDIT","CODIGO TT","ID"],
+  obs:["OBSERVACIONES"], mat:["MATERIALES"], cig:["DETALLE DE CIGARRERA - A"], cant:["CANTIDAD DE CIG A","CANT"],
+  distrito:["DISTRITO"], fecha:["FECHA"], dia:["DIA"], ciudad:["CIUDAD"], cadena:["CADENA"], dir:["DIRECCION"]
+};
+function findHeader(rows){
+  for(var i=0;i<Math.min(rows.length,6);i++){
+    var h=rows[i].map(norm), map={};
+    Object.keys(COLS).forEach(function(k){ for(var a=0;a<COLS[k].length;a++){ var ix=h.indexOf(COLS[k][a]); if(ix>=0){ map[k]=ix; break; } } });
+    if(map.pdv!=null && map.merch!=null && map.ot!=null) return {hi:i,map:map};
+  }
+  return null;
+}
+function sheetRows(ws){ return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false}); }
+function cellFn(row,map){ return function(k){ var v = map[k]==null ? "" : row[map[k]]; return v; }; }
+function txt(v){ return String(v==null?"":v).replace(/ /g," ").replace(/\s+/g," ").trim(); }
+
+/* ═══ Lima: una hoja por día. "LUNES 16.11", "S?BADO 7.11", "LUNES 0409" ═══ */
+function limaSheetDate(name){
+  var n=norm(name), m=n.match(/(\d{1,2})[.\-\/](\d{1,2})\s*$/) || n.match(/(\d{2})(\d{2})\s*$/); if(!m) return null;
+  var dd=+m[1], mm=+m[2]; if(mm<1||mm>12||dd<1||dd>31) return null;
+  var wm=n.match(/^(LUNES|MARTES|MIERCOLES|JUEVES|VIERNES|SABADO|DOMINGO)/), want=wm?DIAS.indexOf(wm[1]):-1, ys=[CFG.year,CFG.year-1,CFG.year+1];
+  if(want<0) return new Date(CFG.year,mm-1,dd);
+  for(var i=0;i<ys.length;i++){ var d=new Date(ys[i],mm-1,dd); if(d.getMonth()===mm-1 && wdi(d)===want) return d; }   // el año que cuadra con el día de la semana
+  return null;
+}
+function parseLimaSheet(name, ws){
+  var day=limaSheetDate(name); if(!day) return [];
+  var rows=sheetRows(ws), H=findHeader(rows); if(!H) return [];
+  var out=[];
+  for(var r=H.hi+1;r<rows.length;r++){
+    var g=cellFn(rows[r],H.map), pdv=txt(g("pdv")); if(!pdv) continue;     // filas sin PDV = rótulos de sección ("LS CORE")
+    var f=asDate(g("fecha")), reprog = f && key(f)!==key(day) ? f : null;
+    out.push(mk("LIMA",txt(g("merch")),"LIMA",pdv,g,[key(day)],false,reprog));
+  }
+  return out;
+}
+function mk(zona,merch,ciudad,pdv,g,days,multi,reprog){
+  /* duplas: "A + B" y "B + A" son la misma fila */
+  merch = norm(merch).split(/\s*\+\s*/).filter(Boolean).sort().join(" + ");
+  return { id:++uid, zona:zona, merch:merch||"SIN MERCH", ciudad:norm(ciudad)||zona, pdv:pdv, codigo:txt(g("codigo")), cadena:norm(g("cadena")), ot:txt(g("ot")),
+    obs:txt(g("obs")), mat:txt(g("mat")), cig:txt(g("cig")), distrito:norm(g("distrito")), dir:txt(g("dir")), days:days, multi:multi, reprog:reprog,
+    search:norm([pdv,txt(g("ot")),txt(g("codigo")),txt(g("distrito")),txt(g("merch")),txt(g("obs"))].join(" ")) };
+}
+
+/* ═══ Provincia (KC): una hoja por semana. La semana sale del nombre de la hoja o del archivo ("DEL 10-11 AL 14-11", "AL 7-11"). ═══ */
+function weekFromName(s){
+  var n=norm(s), m=n.match(/(\d{1,2})[-\/.](\d{1,2})\s*AL\s*(\d{1,2})[-\/.](\d{1,2})/);
+  if(m) return new Date(CFG.year,+m[2]-1,+m[1]);
+  m=n.match(/AL\s*(\d{1,2})[-\/.](\d{1,2})/); if(m) return new Date(CFG.year,+m[2]-1,+m[1]);
+  return null;
+}
+/* "MARTES" → [1]; "LUNES/MARTES" → [0,1]; "MARTES - SABADO" → [1..5] (ventana); "LUNES/MARTES" y "LUNES, MIERCOLES" son días sueltos */
+function parseDias(v){
+  var n=norm(v).replace(/Á|É|Í|Ó|Ú/g,function(c){return c;}), found=[], re=/(LUNES|MARTES|MIERCOLES|JUEVES|VIERNES|SABADO|DOMINGO)/g, m;
+  while((m=re.exec(n))) found.push(DIAS.indexOf(m[1]));
+  if(!found.length) return {idx:[],multi:false};
+  if(found.length===2 && /\s-\s|\sA\s/.test(n) && !/[\/,]/.test(n)){ var out=[]; for(var i=found[0];i<=found[1];i++) out.push(i); return {idx:out,multi:true}; }
+  return {idx:found,multi:found.length>1};
+}
+function parseKcSheet(name, ws, fileName){
+  var rows=sheetRows(ws), H=findHeader(rows); if(!H || H.map.dia==null) return [];
+  var start=weekFromName(name)||weekFromName(fileName); var anchor=start?mondayOf(start):null, out=[];
+  for(var r=H.hi+1;r<rows.length;r++){
+    var g=cellFn(rows[r],H.map), pdv=txt(g("pdv")); if(!pdv) continue;
+    var pd=parseDias(g("dia")), days=[];
+    if(anchor && pd.idx.length) days=pd.idx.map(function(i){ return key(addDays(anchor,i)); });
+    else { var f=asDate(g("fecha")); if(f) days=[key(f)]; }               // sin semana en el nombre: se usa la fecha de la fila
+    if(!days.length) continue;
+    out.push(mk("PROVINCIA",txt(g("merch")),txt(g("ciudad")),pdv,g,days,pd.multi && days.length>1,null));
+  }
+  return out;
+}
+
+/* ═══ Libros: elegir qué hojas leer ═══ */
+function visibleSheets(wb){ var meta=(wb.Workbook&&wb.Workbook.Sheets)||[]; return wb.SheetNames.filter(function(n,i){ return !(meta[i]&&meta[i].Hidden); }); }
+function parseBook(buf, fileName, zona){
+  var cheap=XLSX.read(buf,{type:"array",bookSheets:true}), names=visibleSheets(cheap), rows=[], used=0;
+  var today=new Date(), lo=addDays(today,-7*CFG.semanasAtras), hi=addDays(today,7*CFG.semanasAdelante);
+  if(zona==="LIMA") names=names.filter(function(n){ var d=limaSheetDate(n); return d && d>=lo && d<=hi; });
+  var wb=XLSX.read(buf,{type:"array",cellDates:true,sheets:names});
+  names.forEach(function(n){
+    var ws=wb.Sheets[n]; if(!ws) return;
+    var r = zona==="LIMA" ? parseLimaSheet(n,ws) : parseKcSheet(n,ws,fileName);
+    if(r.length){ rows=rows.concat(r); used++; }
+  });
+  return {rows:rows, src:{zona:zona,file:fileName,hojas:used,filas:rows.length,nota: rows.length?"":"Sin hojas de planning reconocibles"}};
+}
+function zonaDe(name){ return /LIMA/.test(norm(name)) ? "LIMA" : "PROVINCIA"; }
+
+/* ═══ Semana ═══ */
+function weeksWithData(){ var s={}; ALL.forEach(function(e){ e.days.forEach(function(k){ var p=k.split("-"); s[key(mondayOf(new Date(+p[0],+p[1]-1,+p[2])))]=1; }); }); return Object.keys(s).sort(); }
+function setDefaultWeek(){
+  var ws=weeksWithData(), cur=key(mondayOf(new Date()));
+  if(!ws.length){ weekStart=mondayOf(new Date()); return; }
+  var k = ws.indexOf(cur)>=0 ? cur : (ws.filter(function(w){return w<=cur;}).pop()||ws[ws.length-1]);
+  var p=k.split("-"); weekStart=new Date(+p[0],+p[1]-1,+p[2]);
+}
+function passes(e){
+  var v=function(id){return $(id).value;}, q=norm($("search").value);
+  return (!v("fZona")||e.zona===v("fZona")) && (!v("fMerch")||e.merch===v("fMerch")) && (!v("fCadena")||e.cadena===v("fCadena")) && (!q||e.search.indexOf(q)>=0);
+}
+function fillSelect(id, vals, all){ var el=$(id), cur=el.value; el.innerHTML='<option value="">'+all+'</option>'+vals.map(function(v){return '<option>'+esc(v)+'</option>';}).join(""); if(cur&&vals.indexOf(cur)>=0) el.value=cur; }
+
+/* ═══ Render ═══ */
+function render(){
+  var keys=[], i; for(i=0;i<7;i++) keys.push(key(addDays(weekStart,i)));
+  var weekEntries=ALL.filter(function(e){ return e.days.some(function(k){ return keys.indexOf(k)>=0; }); });
+  fillSelect("fMerch",uniq(weekEntries,"merch"),"Todos"); fillSelect("fCadena",uniq(weekEntries,"cadena").filter(Boolean),"Todas");
+  var list=weekEntries.filter(passes), todayK=key(new Date());
+  var showSun=list.some(function(e){ return e.days.indexOf(keys[6])>=0; }), ndays=showSun?7:6;
+  $("wkLbl").textContent=fmt(weekStart)+" – "+fmt(addDays(weekStart,ndays-1))+" "+addDays(weekStart,ndays-1).getFullYear();
+  var pdvs={}, merchs={}, lima=0, prov=0, multi=0;
+  list.forEach(function(e){ pdvs[e.pdv]=1; merchs[e.zona+e.merch]=1; if(e.zona==="LIMA") lima++; else prov++; if(e.multi) multi++; });
+  $("kpis").innerHTML=[["OT planificadas",list.length],["PDV distintos",Object.keys(pdvs).length],["Merch con ruta",Object.keys(merchs).length],["Lima",lima],["Provincia (KC)",prov],["OT con ventana de varios días",multi]]
+    .map(function(k){ return '<div class="kpi"><b>'+k[1]+'</b><span>'+k[0]+'</span></div>'; }).join("");
+  if(mode==="merch") boardMerch(list,keys.slice(0,ndays),todayK); else boardDia(list,keys.slice(0,ndays),todayK);
+  $("boardHint").textContent = list.length ? "Toca una celda o un día para ver las tiendas. Borde punteado = OT con ventana de varios días." : "No hay planning cargado para esta semana. Usa ◀ ▶ para moverte entre semanas.";
+  renderSources(); postH();
+}
+function uniq(rows,k){ var s={}; rows.forEach(function(r){ if(r[k]) s[r[k]]=1; }); return Object.keys(s).sort(); }
+function dayHead(k,i,todayK){ var p=k.split("-"), d=new Date(+p[0],+p[1]-1,+p[2]); return '<th class="'+(k===todayK?"today":"")+'">'+DIAL[i]+'<small>'+fmt(d)+'</small></th>'; }
+function summary(items){
+  var g={}; items.forEach(function(e){ var o=e.ot||"(sin OT)"; (g[o]=g[o]||{n:0,multi:true}).n++; if(!e.multi) g[o].multi=false; });
+  return Object.keys(g).sort(function(a,b){return g[b].n-g[a].n;}).slice(0,3).map(function(o){ return '<div class="ot'+(g[o].multi?" multi":"")+'" title="'+esc(o)+'">'+g[o].n+'× '+esc(o)+'</div>'; }).join("");
+}
+var CELLS = {};
+function boardMerch(list, keys, todayK){
+  var rows={}; list.forEach(function(e){ var k=e.zona+"|"+e.merch; (rows[k]=rows[k]||{zona:e.zona,merch:e.merch,ciudades:{},items:[]}); rows[k].ciudades[e.ciudad]=1; rows[k].items.push(e); });
+  var rl=Object.keys(rows).map(function(k){return rows[k];}).sort(function(a,b){ return a.zona===b.zona ? (a.merch>b.merch?1:-1) : (a.zona==="LIMA"?-1:1); });
+  CELLS={}; var html='<table class="grid"><tr><th style="width:170px">Merch</th>'+keys.map(function(k,i){return dayHead(k,i,todayK);}).join("")+'</tr>';
+  rl.forEach(function(r,ri){
+    html+='<tr><td class="who"><span class="z '+r.zona+'">'+(r.zona==="LIMA"?"LIMA":"KC")+'</span>'+esc(r.merch)+'<small>'+esc(Object.keys(r.ciudades).join(", "))+' · '+r.items.length+' OT</small></td>';
+    keys.forEach(function(k){
+      var its=r.items.filter(function(e){ return e.days.indexOf(k)>=0; }), id=ri+"|"+k;
+      if(!its.length){ html+='<td class="cell'+(k===todayK?" today":"")+'" data-c=""></td>'; return; }
+      CELLS[id]={titulo:r.merch+" · "+k.split("-").reverse().join("/"),items:its};
+      var allMulti=its.every(function(e){return e.multi;});
+      html+='<td class="cell'+(k===todayK?" today":"")+'" data-c="'+id+'"><span class="n'+(allMulti?" multi":"")+'">'+its.length+'</span>'+summary(its)+'</td>';
+    });
+    html+='</tr>';
+  });
+  $("board").innerHTML = rl.length ? html+'</table>' : "";
+}
+function boardDia(list, keys, todayK){
+  CELLS={}; var html='<div class="days">';
+  keys.forEach(function(k,i){
+    var its=list.filter(function(e){ return e.days.indexOf(k)>=0; }).sort(function(a,b){ return a.zona===b.zona ? (a.merch>b.merch?1:-1) : (a.zona==="LIMA"?-1:1); }), p=k.split("-"), d=new Date(+p[0],+p[1]-1,+p[2]);
+    var g={}; its.forEach(function(e){ var m=e.zona+"|"+e.merch; (g[m]=g[m]||{zona:e.zona,merch:e.merch,items:[]}).items.push(e); });
+    html+='<div class="day'+(k===todayK?" today":"")+'"><h4>'+DIAL[i]+' '+fmt(d)+' <span style="font-weight:400">· '+its.length+' OT</span></h4>';
+    var gl=Object.keys(g);
+    html+= gl.length ? gl.map(function(m,mi){ var id=i+"|"+mi; CELLS[id]={titulo:g[m].merch+" · "+k.split("-").reverse().join("/"),items:g[m].items};
+      return '<div class="it" data-c="'+id+'"><b><span class="z '+g[m].zona+'">'+(g[m].zona==="LIMA"?"LIMA":"KC")+'</span>'+esc(g[m].merch)+' · '+g[m].items.length+'</b><span>'+esc(summary(g[m].items).replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim())+'</span></div>'; }).join("") : '<div class="empty">Sin planning</div>';
+    html+='</div>';
+  });
+  $("board").innerHTML=html+'</div>';
+}
+$("board").onclick=function(e){ var t=e.target.closest("[data-c]"); if(!t||!t.dataset.c) return; var c=CELLS[t.dataset.c]; if(c) openLb(c); };
+function openLb(c){
+  $("lbBox").innerHTML='<h3>'+esc(c.titulo)+' <span class="status">· '+c.items.length+' OT</span></h3><div class="scroll"><table class="plain"><tr><th>PDV</th><th>OT</th><th>Materiales</th><th>Distrito</th><th>Código</th><th>Observaciones</th></tr>'+
+    c.items.map(function(e){ return '<tr><td>'+esc(e.pdv)+(e.multi?' <span class="tag">ventana</span>':'')+(e.reprog?' <span class="tag">reprogramada · era '+fmt(e.reprog)+'</span>':'')+'</td><td>'+esc(e.ot)+'</td><td>'+esc(e.mat||e.cig)+'</td><td>'+esc(e.distrito||e.ciudad)+'</td><td>'+esc(e.codigo)+'</td><td>'+esc(e.obs)+'</td></tr>'; }).join("")+'</table></div>';
+  $("lb").classList.add("on");
+}
+$("lb").onclick=function(e){ if(e.target===$("lb")) $("lb").classList.remove("on"); };
+document.addEventListener("keydown",function(e){ if(e.key==="Escape") $("lb").classList.remove("on"); });
+function renderSources(){
+  $("srcCount").textContent="· "+SOURCES.filter(function(s){return s.filas;}).length+" archivos con planning";
+  $("srcTable").innerHTML='<tr><th>Zona</th><th>Archivo</th><th class="n">Hojas</th><th class="n">Filas</th><th>Nota</th></tr>'+SOURCES.map(function(s){
+    return '<tr><td>'+(s.zona==="LIMA"?"Lima":"Provincia (KC)")+'</td><td>'+esc(s.file)+'</td><td>'+(s.hojas||"")+'</td><td>'+(s.filas||"")+'</td><td class="status'+(s.nota?" err":"")+'">'+esc(s.nota)+'</td></tr>'; }).join("");
+}
+$("prev").onclick=function(){ weekStart=addDays(weekStart,-7); render(); };
+$("next").onclick=function(){ weekStart=addDays(weekStart,7); render(); };
+$("today").onclick=function(){ weekStart=mondayOf(new Date()); render(); };
+["fZona","fMerch","fCadena"].forEach(function(id){ $(id).onchange=render; }); $("search").oninput=render;
+$("vMerch").onclick=function(){ mode="merch"; $("vMerch").classList.add("on"); $("vDia").classList.remove("on"); render(); };
+$("vDia").onclick=function(){ mode="dia"; $("vDia").classList.add("on"); $("vMerch").classList.remove("on"); render(); };
+
+function onData(rows, sources, label){
+  ALL=rows; SOURCES=sources; $("app").hidden=false; setDefaultWeek(); render();
+  var st=$("status"); st.className="status ok"; st.textContent="✓ "+rows.length.toLocaleString("es-PE")+" OT planificadas · "+label;
+}
+function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
+window.addEventListener("resize",postH);
+function setSt(t,cls){ var s=$("status"); s.textContent=t; s.className="status"+(cls?" "+cls:""); }
+function fail(err){ setSt("⚠ "+((err&&err.message)||err),"err"); }
+
+/* ═══ Carga manual: la zona se deduce del nombre del archivo (…LIMA… = Lima; el resto, provincia) ═══ */
+$("fileInput").onchange=function(e){
+  var files=[].slice.call(e.target.files); if(!files.length) return; setSt("Leyendo "+files.length+" archivo(s)…");
+  Promise.all(files.map(function(f){ return f.arrayBuffer().then(function(b){ return parseBook(b,f.name,zonaDe(f.name)); }); }))
+  .then(function(rs){ onData([].concat.apply([],rs.map(function(r){return r.rows;})), rs.map(function(r){return r.src;}), "carga manual"); }).catch(fail);
+};
+
+/* ═══ Conexión en vivo: Microsoft Graph + MSAL ═══ */
+var msalApp=null, busy=false, G="https://graph.microsoft.com/v1.0/drives/"+CFG.driveId;
+function token(interactive){
+  var req={scopes:CFG.scopes}, acc=msalApp.getAllAccounts()[0];
+  if(acc){ req.account=acc; return msalApp.acquireTokenSilent(req).then(function(r){return r.accessToken;}).catch(function(){
+    if(!interactive) return Promise.reject(new Error("silent-failed")); return msalApp.acquireTokenPopup(req).then(function(r){return r.accessToken;}); }); }
+  if(!interactive) return Promise.reject(new Error("no-account"));
+  return msalApp.loginPopup(req).then(function(r){ $("msUser").textContent=r.account.username; return r.accessToken; });
+}
+function gfetch(url,t){ return fetch(url,{headers:{Authorization:"Bearer "+t}}).then(function(r){ if(!r.ok) throw new Error("Graph HTTP "+r.status); return r; }); }
+function kids(id,t){ return gfetch(G+"/items/"+id+"/children?$select=id,name,size,folder,file,lastModifiedDateTime&$top=200",t).then(function(r){return r.json();}).then(function(j){return j.value||[];}); }
+var isXlsx=function(i){ return i.file && /\.xls[xm]$/i.test(i.name) && i.name.indexOf("~$")!==0; };
+var isPlan=function(i){ return isXlsx(i) && /PLANNING/i.test(i.name) && !/SEGUIMIENTO|PRODUCTIVIDAD/i.test(i.name); };
+
+function loadLive(silent){
+  if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y buscando los planning…");
+  var t, jobs=[];
+  token(!silent).then(function(tk){ t=tk; return kids(CFG.internoId,t); })
+  .then(function(top){
+    var lima=top.filter(function(i){return i.folder && /LIMA/i.test(i.name);})[0], prov=top.filter(function(i){return i.folder && /PROVINCIA/i.test(i.name);})[0];
+    if(!lima && !prov) throw new Error("No encontré las carpetas LIMA / PROVINCIA dentro de PROYECTO INTERNO.");
+    return Promise.all([
+      lima ? kids(lima.id,t).then(function(items){
+        /* Lima: el archivo de planning más reciente (se va renombrando: SET (3), (4)…) */
+        var c=items.filter(isPlan).sort(function(a,b){ return a.lastModifiedDateTime<b.lastModifiedDateTime?1:-1; })[0];
+        if(c) jobs.push({id:c.id,name:c.name,zona:"LIMA"});
+      }) : null,
+      prov ? kids(prov.id,t).then(function(items){
+        var f=items.filter(function(i){return i.folder && /PLANNING/i.test(i.name);})[0];     // PLANNING SEMANAL: un archivo por semana (o varios)
+        return f ? kids(f.id,t).then(function(fs){ fs.filter(isPlan).forEach(function(i){ jobs.push({id:i.id,name:i.name,zona:"PROVINCIA"}); }); }) : null;
+      }) : null
+    ]);
+  }).then(function(){
+    if(!jobs.length) throw new Error("No encontré archivos de planning (nombre con «PLANNING») en LIMA ni en PROVINCIA/PLANNING SEMANAL.");
+    var rows=[], sources=[], done=0;
+    return Promise.all(jobs.map(function(j){
+      return gfetch(G+"/items/"+j.id+"/content",t).then(function(r){return r.arrayBuffer();}).then(function(b){ setSt("Procesando "+j.name+"…"); var r=parseBook(b,j.name,j.zona); rows=rows.concat(r.rows); sources.push(r.src); })
+      .catch(function(e){ sources.push({zona:j.zona,file:j.name,hojas:0,filas:0,nota:"Error al leer: "+((e&&e.message)||e)}); })
+      .then(function(){ done++; setSt("Leyendo planning… "+done+" de "+jobs.length); });
+    })).then(function(){ return {rows:rows,sources:sources}; });
+  }).then(function(res){
+    onData(res.rows,res.sources,"SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false;
+  }).catch(function(err){
+    var m=(err&&err.message)||String(err);
+    if(silent && (m==="no-account"||m==="silent-failed")) return;
+    if(m.indexOf("403")>=0) setSt("⚠ Tu cuenta no tiene acceso a la carpeta (403). Pide a acastro que te comparta PLAN/PROYECTOS ACTUALES/PROYECTO INTERNO, o usa la carga manual.","err");
+    else if(m.indexOf("404")>=0) setSt("⚠ No se encontró la carpeta (404): la movieron o borraron. Usa la carga manual.","err");
+    else if(m.indexOf("interaction_in_progress")>=0) setSt("⚠ Hay un inicio de sesión en curso. Recarga (F5) y completa el login.","err");
+    else if(m.indexOf("popup")>=0) setSt("⚠ El navegador bloqueó la ventana de inicio de sesión: permite ventanas emergentes para este sitio.","err");
+    else fail(err);
+  }).finally(function(){ busy=false; });
+}
+function initMs(){
+  if(typeof msal==="undefined"){ $("msConnect").hidden=true; return; }
+  msalApp=new msal.PublicClientApplication({auth:{clientId:CFG.clientId,authority:"https://login.microsoftonline.com/"+CFG.tenant,redirectUri:location.origin+location.pathname},cache:{cacheLocation:"localStorage"}});
+  msalApp.initialize().then(function(){return msalApp.handleRedirectPromise();}).then(function(resp){
+    if(resp&&resp.account) msalApp.setActiveAccount(resp.account);
+    var acc=msalApp.getActiveAccount()||msalApp.getAllAccounts()[0];
+    if(acc){ msalApp.setActiveAccount(acc); $("msUser").textContent=acc.username; loadLive(true); }
+  }).catch(function(e){ console.warn("MSAL init:",e&&e.message); });
+  $("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
+}
+initMs(); postH();
+})();
+</script>
+</body>
+</html>
