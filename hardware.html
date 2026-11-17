@@ -37,6 +37,10 @@
   .cmp label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
   .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
   .tag{font-size:10.5px;padding:1px 7px;border-radius:999px;background:rgba(29,59,120,.12);color:var(--brand);font-weight:600}
+  .search{width:100%;max-width:520px;font-size:14px;padding:9px 12px}
+  tr.det>td{background:var(--bg);padding:12px 14px}
+  .info{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:6px 16px;margin-bottom:10px;font-size:12.5px}
+  .info span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
   a{color:var(--brand)}
 </style>
 </head>
@@ -60,6 +64,12 @@
   </div>
 
   <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>Buscar tienda <span class="status">· busca en todos los PDV, sin importar los filtros de arriba</span></h3>
+    <input type="text" id="stSearch" class="search" placeholder="Nombre de la tienda, ID STORE, distrito, dirección o cadena…" autocomplete="off">
+    <div id="stOut" style="margin-top:10px"></div>
+  </div>
 
   <div class="card">
     <h3>Indicadores <span class="status" id="dimHint"></span></h3>
@@ -154,11 +164,40 @@ function renderAct(rows){
   $("actNote").textContent = META ? "Unidades = cantidades escritas en el Excel (cigarreras A/B/C, dispenser A/B, glorificadores, volumétricos, TV, espejo)."+(META.cantidadesRaras?" "+META.cantidadesRaras+" cantidades mayores a "+HW.CFG.maxQty+" se contaron como 1 por parecer error de digitación.":"")+(META.duplicados?" "+META.duplicados+" ID STORE repetidos se ignoraron.":"") : "";
 }
 $("actSearch").oninput=function(){ renderAct(filtered()); postH(); };
+/* ═══ Buscador de tiendas: todos los PDV; al elegir una tienda se ven sus activos ═══ */
+var STORES = [];
+function storeKey(r){ return r._s || (r._s = HW.norm([r.id,r.pos,r.distrito,r.dir,r.ciudad,r.cadena].join(" "))); }
+function val(v){ var t=String(v==null?"":v).trim(); return t; }
+function renderStores(){
+  var q=HW.norm($("stSearch").value), box=$("stOut");
+  if(q.length<2){ STORES=[]; box.innerHTML='<p class="hint" style="margin:0">Escribe al menos 2 letras, o el ID STORE.</p>'; postH(); return; }
+  var toks=q.split(" "), hits=ALL.filter(function(r){ var k=storeKey(r); return toks.every(function(t){ return k.indexOf(t)>=0; }); });
+  STORES=hits.slice(0,30);
+  box.innerHTML = hits.length
+    ? '<p class="hint" style="margin:0 0 6px">'+nf(hits.length)+' tienda'+(hits.length===1?'':'s')+(hits.length>30?' · mostrando 30, afina la búsqueda':'')+' · toca una fila para ver sus activos</p><div class="scroll" style="max-height:560px"><table><tr><th>ID STORE</th><th>Tienda</th><th>Cadena</th><th>Ciudad</th><th>Distrito</th><th class="n">Activos</th></tr>'+
+      STORES.map(function(r,i){ return '<tr class="click" data-i="'+i+'"><td>'+esc(r.id)+'</td><td>'+esc(r.pos)+'</td><td>'+esc(r.cadena)+'</td><td>'+esc(r.ciudad)+'</td><td>'+esc(r.distrito)+'</td><td class="n">'+r.u.total+'</td></tr>'; }).join("")+'</table></div>'
+    : '<p class="hint" style="margin:0">No encontré tiendas con «'+esc($("stSearch").value)+'».</p>';
+  if(STORES.length===1){ var tr=box.querySelector("tr.click"); if(tr) toggleStore(tr); }
+  postH();
+}
+function storeDetail(r){
+  var info=[["Zona",r.zona],["Canal",r.canal],["Dirección",r.dir],["Status",r.status],["Comunicación cigarrera",r.comCig],["Comunicación dispenser",r.comDisp],["Comodato",r.comodato],["POS viajero",r.viajero]]
+    .filter(function(x){ return val(x[1]) && val(x[1])!=="N/A"; });
+  return '<div class="info">'+info.map(function(x){ return '<div><span>'+x[0]+'</span>'+esc(val(x[1]))+'</div>'; }).join("")+'</div>'+
+    (r.assets.length ? '<table><tr><th>Categoría</th><th>Activo</th><th class="n">Cantidad</th></tr>'+r.assets.map(function(a){ return '<tr><td><span class="tag">'+esc(a.cat)+'</span></td><td>'+esc(a.act)+'</td><td class="n">'+nf(a.n)+'</td></tr>'; }).join("")+
+      '<tr><td colspan="2"><b>Total de activos</b></td><td class="n"><b>'+nf(r.u.total)+'</b></td></tr></table>' : '<p class="hint" style="margin:0">Esta tienda no tiene activos BAT registrados en el Excel.</p>');
+}
+function toggleStore(tr){
+  var nx=tr.nextElementSibling; if(nx && nx.classList.contains("det")){ nx.remove(); return; }
+  var r=STORES[+tr.dataset.i]; if(r) tr.insertAdjacentHTML("afterend",'<tr class="det"><td colspan="6">'+storeDetail(r)+'</td></tr>');
+}
+$("stSearch").oninput=renderStores;
+$("stOut").onclick=function(e){ var tr=e.target.closest("tr.click"); if(!tr) return; toggleStore(tr); postH(); };
 $("actCsv").onclick=function(){ csv("hardware_activos.csv",["Categoría","Activo","PDV","Unidades"],(window.__actList||[]).map(function(a){return [a.cat,a.act,a.pdv,a.units];})); };
 
 /* ═══ Carga ═══ */
 function onData(res,label,cur){
-  ALL=res.rows; META=res.meta; CUR=cur||CUR; $("app").hidden=false; buildFilters(); buildTabs(); render();
+  ALL=res.rows; META=res.meta; CUR=cur||CUR; $("app").hidden=false; buildFilters(); buildTabs(); render(); renderStores();
   var st=$("status"); st.className="status ok"; st.textContent="✓ "+nf(ALL.length)+" PDV · "+label;
 }
 function setSt(t,cls){ var s=$("status"); s.textContent=t; s.className="status"+(cls?" "+cls:""); }

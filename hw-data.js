@@ -41,7 +41,7 @@ function coord(v, isLat){
 var COLS = { id:"ID STORE", zona:"LIMA/KC/NKC", canal:"CANAL", ciudad:"CIUDAD", comCig:"COMUNICACION DE CIGARRERA", cadena:"CADENA", pos:"POS", status:"STATUS", tipoCig:"TIPO DE CIG",
   tvQ:"CANTIDAD PANTALLA", cigA:"DETALLE DE CIGARRERA - A", cigAQ:"CANTIDAD CIG - A", cigB:"DETALLE DE CIGARRERA - B", cigBQ:"CANTIDAD CIG - B", cigC:"DETALLE DE CIGARRERA - C", cigCQ:"CANTIDAD CIG - C",
   comDisp:"COMUNICACION DISPENSER", dispA:"DISPENSER A", dispB:"DISPENSER B", dispQ:"CANTIDAD DISP.", gFmc:"G. FMC", gVuse:"G. VUSE", gVelo:"G. VELO", gVuseQ:"CANT. GLORI VUSE",
-  vol:"VOLUMETRICO", volQ:"CANTIDAD VOLUMETRICOS", espejo:"ESPEJO", comodato:"COMODATO", viajero:"POS VIAJERO", distrito:"DISTRITO", lat:"LATITUD", lon:"LONGITUD" };
+  vol:"VOLUMETRICO", volQ:"CANTIDAD VOLUMETRICOS", espejo:"ESPEJO", comodato:"COMODATO", viajero:"POS VIAJERO", distrito:"DISTRITO", dir:"DIRECCION", lat:"LATITUD", lon:"LONGITUD" };
 
 function assetsOf(r, warn){
   var out=[], q=function(v){ var n=num(v); if(n>CFG.maxQty){ warn.n++; return 1; } return n; };
