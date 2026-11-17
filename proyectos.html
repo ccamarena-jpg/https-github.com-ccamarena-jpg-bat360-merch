@@ -76,6 +76,7 @@
     <div><label>Hasta</label><input type="date" id="fHasta"></div>
     <div><label>Proyecto</label><select id="fProyecto"></select></div>
     <div><label>Cadena</label><select id="fCadena"></select></div>
+    <div><label>Ubigeo</label><select id="fZona"></select></div>
     <div><label>Distrito</label><select id="fDistrito"></select></div>
     <div><label>Resultado</label><select id="fRes"><option value="">Todos</option><option value="efectivo">Efectivo</option><option value="noefectivo">No efectivo</option><option value="visitado">Visitado (sin efectividad)</option><option value="pendiente">Pendiente</option></select></div>
     <div><label>Buscar</label><input type="text" id="search" placeholder="Tienda, código TT, OT, merch…"></div>
@@ -84,6 +85,12 @@
   </div>
 
   <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>Avance por ubigeo <span class="status">· Lima, KC (ciudades clave) y NKC · toca una fila para filtrar</span></h3>
+    <div style="overflow-x:auto"><table id="zonaTable"></table></div>
+    <p class="hint" id="zonaHint"></p>
+  </div>
 
   <div class="card">
     <h3>Avance por mes <span class="status">· por fecha programada</span></h3>
@@ -170,7 +177,7 @@ var COLS = {
   tienda:["TIENDA","TIENDAS","POS","NOMBRE DEL PDV","NOMBRE PDV","PDV","NOMBRE DE LA TIENDA"],
   codigo:["CODIGO TT","CODIGO TT AUDIT","COD TT AUDIT","ID STORE","CODIGO"],
   status:["STATUS","ESTADO"], efect:["EFECTIVIDAD","RESULTADO"],
-  cadena:["CADENA"], distrito:["DISTRITO"], merch:["MERCH","ENCARGADO","MERCHANDISER"],
+  cadena:["CADENA"], distrito:["DISTRITO"], ciudad:["CIUDAD"], merch:["MERCH","ENCARGADO","MERCHANDISER"],
   obs:["OBSERVACIONES","OBSERVACION","COMENTARIO","DETALLE COMENTARIOS NO EFECTIVOS","MOTIVO NO EFECTIVOS","OBSERVACIONES DETALLADAS"],
   link:["LINK","LINK FOTO"], ot:["DETALLE DE OT","DETALLE DE OTS","TIPO DE OTS","OT"]
 };
@@ -180,6 +187,8 @@ function findCols(h){
   Object.keys(COLS).forEach(function(k){ for(var a=0;a<COLS[k].length;a++){ var ix=h.indexOf(COLS[k][a]); if(ix>=0){ map[k]=ix; break; } } });
   for(var p=0;p<DATE_PREF.length && map.fecha==null;p++) for(var i=0;i<h.length;i++) if(h[i].indexOf("FECHA")===0 && h[i].indexOf(DATE_PREF[p])>=0){ map.fecha=i; break; }
   if(map.fecha==null) for(var j=0;j<h.length;j++) if(h[j].indexOf("FECHA")===0){ map.fecha=j; break; }
+  /* Ubigeo: la columna con Lima / KC / NKC (se escribe «LIMA/KC/NKC», «LIMA /KC/NKC», «LIMA - KC - NKC» o «LIMA / PROV») */
+  for(var z=0;z<h.length;z++){ var hz=h[z].replace(/\s/g,""); if(hz==="LIMA/KC/NKC"||hz==="LIMA-KC-NKC"||hz==="LIMA/PROV"||hz==="LIMA/PROVINCIA"){ map.zona=z; break; } }
   /* Foto: cualquier columna "LINK …" (p. ej. "LINK IMPLEMENTACION" en Plan Mass), menos la de comodatos */
   if(map.link==null) for(var k=0;k<h.length;k++) if(h[k].indexOf("LINK")===0 && h[k].indexOf("COMODATO")<0){ map.link=k; break; }
   return map;
@@ -191,6 +200,20 @@ function sheetRows(ws){
   Object.keys(ws).forEach(function(k){ if(k.charAt(0)==="!") return; var c=XLSX.utils.decode_cell(k); if(c.r>maxR) maxR=c.r; if(c.c>maxC) maxC=c.c; });
   rg.e.r=Math.min(rg.e.r,maxR); rg.e.c=Math.min(rg.e.c,maxC);
   return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false,range:rg});
+}
+function zonaVal(v){ var n=norm(v); return (n==="LIMA"||n==="KC"||n==="NKC") ? n : ""; }
+/* Filas sin ubigeo en su Excel: se deduce (1) por el código de la tienda en otros proyectos, (2) por su distrito, (3) por su ciudad, votando
+   con las filas que sí lo traen. Si no hay forma, «SIN DATO». Las deducidas quedan marcadas (zonaInf). */
+function inferZona(rows){
+  var byCode={}, byDist={}, byCity={};
+  var vote=function(m,k,z){ if(!k) return; var o=m[k]||(m[k]={}); o[z]=(o[z]||0)+1; };
+  rows.forEach(function(r){ if(!r.zona) return; vote(byCode,r.codigo,r.zona); vote(byDist,r.distrito!=="SIN DISTRITO"?r.distrito:"",r.zona); vote(byCity,r.ciudad,r.zona); });
+  var best=function(o){ var b="", n=0; if(!o) return ""; Object.keys(o).forEach(function(z){ if(o[z]>n){ n=o[z]; b=z; } }); return b; };
+  rows.forEach(function(r){
+    if(r.zona){ r.zonaInf=false; return; }
+    var z=best(byCode[r.codigo]) || (r.distrito!=="SIN DISTRITO" ? best(byDist[r.distrito]) : "") || best(byCity[r.ciudad]);
+    r.zona=z||"SIN DATO"; r.zonaInf=!!z;
+  });
 }
 function parseSheet(ws, proyecto){
   var rows = sheetRows(ws), hi=-1, map=null;
@@ -207,7 +230,7 @@ function parseSheet(ws, proyecto){
     if(ld){ if(!fp) fp = ld; else if(fp.ny) fp = {y:ld.y, m:fp.m, d:fp.d}; }   // la hoja manda; de la foto solo se toma el año (o la fecha si la hoja no tiene)
     var cadena=String(g("cadena")).trim(); if(!cadena){ var pm=tienda.match(/^([A-Za-zÁÉÍÓÚÑáéíóúñ ]{2,20}?)\s+[-–]\s+/); cadena=pm?norm(pm[1]):"SIN CADENA"; }
     var o={ proyecto:proyecto, codigo:String(g("codigo")).trim(), tienda:tienda, cadena:cadena, res:estado(g("efect"),g("status")),
-      merch:String(g("merch")).trim(), obs:String(g("obs")).trim(), link:link, ot:String(g("ot")).trim(), fProg:fp, fRep:null, distrito:norm(g("distrito"))||"SIN DISTRITO" };
+      merch:String(g("merch")).trim(), obs:String(g("obs")).trim(), link:link, ot:String(g("ot")).trim(), fProg:fp, fRep:null, distrito:norm(g("distrito"))||"SIN DISTRITO", ciudad:norm(g("ciudad")), zona:zonaVal(g("zona")) };
     o.search=norm([o.tienda,o.codigo,o.ot,o.merch,o.obs,o.distrito].join(" "));
     out.push(o);
   }
@@ -243,6 +266,7 @@ function buildFilters(){
   var names={}; ALL.forEach(function(r){ names[r.proyecto]=1; });
   fillSelect("fProyecto",Object.keys(names).sort(),"Todos");
   fillSelect("fCadena",uniq(ALL,"cadena"),"Todas"); fillSelect("fDistrito",uniq(ALL,"distrito"),"Todos");
+  fillSelect("fZona",["LIMA","KC","NKC","SIN DATO"].filter(function(z){ return ALL.some(function(r){return r.zona===z;}); }),"Todos");
 }
 /* Periodo: si hay Desde/Hasta manda el rango; si no, el mes elegido; "Todos los meses" = sin filtro de fecha */
 function inPeriod(r){
@@ -254,7 +278,7 @@ function inPeriod(r){
 }
 function passOthers(r){
   var v=function(id){return $(id).value;}, q=norm($("search").value);
-  return inPeriod(r) && (!v("fCadena")||r.cadena===v("fCadena")) && (!v("fDistrito")||r.distrito===v("fDistrito")) && (!v("fRes")||r.res===v("fRes")) && (!q||r.search.indexOf(q)>=0);
+  return inPeriod(r) && (!v("fCadena")||r.cadena===v("fCadena")) && (!v("fZona")||r.zona===v("fZona")) && (!v("fDistrito")||r.distrito===v("fDistrito")) && (!v("fRes")||r.res===v("fRes")) && (!q||r.search.indexOf(q)>=0);
 }
 
 /* ═══ Render ═══ */
@@ -268,7 +292,7 @@ function render(){
     ["OT / tiendas",c.t,""],["Ejecutadas",ej,""],["Avance",pct(ej,c.t),""],["Efectivas",c.efectivo,"good"],["No efectivas",c.noefectivo,"bad"],
     ["% efectividad",pct(c.efectivo,c.efectivo+c.noefectivo),""],["Visitadas s/ dato",c.visitado,""],["Pendientes",c.pendiente,""],["Con foto",c.foto,""]
   ].map(function(k){ return '<div class="kpi '+k[2]+'"><b>'+k[1]+'</b><span>'+k[0]+'</span></div>'; }).join("");
-  renderMonths(); renderSources(); renderGallery(true); postH();
+  renderZonas(); renderMonths(); renderSources(); renderGallery(true); postH();
 }
 function renderProjs(rows){
   var g={}; rows.forEach(function(r){ (g[r.proyecto]=g[r.proyecto]||[]).push(r); });
@@ -281,6 +305,14 @@ function renderProjs(rows){
   $("projs").innerHTML=card("",tot,"TODAS LAS CAMPAÑAS")+list.map(function(c){ return card(c.k,c,c.k); }).join("");
   $("projHint").textContent="· "+list.length+" campañas · barra: verde efectivo, rojo no efectivo, azul visitado sin dato, gris pendiente";
   Array.prototype.forEach.call($("projs").children,function(b){ b.onclick=function(){ $("fProyecto").value=b.dataset.k; render(); }; });
+}
+function renderZonas(){
+  var g={}; VIEW.forEach(function(r){ (g[r.zona]=g[r.zona]||[]).push(r); });
+  var order=["LIMA","KC","NKC","SIN DATO"].filter(function(z){ return g[z]; }), inf=VIEW.filter(function(r){return r.zonaInf;}).length;
+  $("zonaTable").innerHTML='<tr><th>Ubigeo</th><th class="n">OT</th><th class="n">Efectivo</th><th class="n">No efectivo</th><th class="n">Visitado</th><th class="n">Pendiente</th><th class="n">% ejecutado</th><th style="width:160px"></th></tr>'+
+    (order.map(function(z){ var c=counts(g[z]); return '<tr class="click" data-z="'+z+'" style="cursor:pointer"><td><b>'+z+'</b></td><td class="n">'+c.t+'</td><td class="n">'+c.efectivo+'</td><td class="n">'+c.noefectivo+'</td><td class="n">'+c.visitado+'</td><td class="n">'+c.pendiente+'</td><td class="n">'+pct(ejec(c),c.t)+'</td><td>'+barHtml(c)+'</td></tr>'; }).join("") || '<tr><td class="status">Sin datos.</td></tr>');
+  $("zonaHint").textContent = inf ? inf.toLocaleString("es-PE")+" de "+VIEW.length.toLocaleString("es-PE")+" registros no traen el ubigeo en su Excel: se dedujo por el código de la tienda, su distrito o su ciudad." : "";
+  Array.prototype.forEach.call($("zonaTable").querySelectorAll("tr.click"),function(tr){ tr.onclick=function(){ $("fZona").value=tr.dataset.z; render(); }; });
 }
 function renderMonths(){
   var g={}; VIEW.forEach(function(r){ var k=r.fProg?dkey(r.fProg):"-"; (g[k]=g[k]||[]).push(r); });
@@ -307,7 +339,7 @@ function renderGallery(reset){
   $("gal").insertAdjacentHTML("beforeend", next.map(function(r,i){
     var idx=shown+i, im = r.link && isImg(r.link) ? '<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(r.link)+'" alt="" onerror="this.replaceWith(document.createTextNode(\'📷\'))">' : (r.link?'📷':'🚫');
     return '<div class="ph" data-i="'+idx+'"><div class="im">'+im+'</div><div class="tx"><b title="'+esc(r.tienda)+'">'+esc(r.tienda||"(sin tienda)")+'</b>'+
-      '<span>'+esc(r.proyecto)+'</span><br><span>'+esc(dstr(r.fProg))+(r.fProg?' · ':'')+'</span><span class="chip '+r.res+'">'+RESL[r.res]+'</span></div></div>'; }).join(""));
+      '<span>'+esc(r.proyecto)+' · '+esc(r.zona)+'</span><br><span>'+esc(dstr(r.fProg))+(r.fProg?' · ':'')+'</span><span class="chip '+r.res+'">'+RESL[r.res]+'</span></div></div>'; }).join(""));
   shown += next.length;
   $("galCount").textContent="· "+PHOTOS.length.toLocaleString("es-PE")+" registros";
   $("galHint").innerHTML = shown<PHOTOS.length ? 'Mostrando '+shown+' de '+PHOTOS.length+'. <a href="#" id="moreBtn">Mostrar más</a>' : (PHOTOS.length?"":"No hay registros con foto para estos filtros.");
@@ -320,7 +352,7 @@ function openLb(r,ev){
   var big = r.link && isImg(r.link) ? '<img referrerpolicy="no-referrer" src="'+esc(r.link)+'" alt="">' : '<span style="color:#aaa">Sin vista previa'+(r.link?' · <a style="color:#9cf" target="_blank" rel="noopener noreferrer" href="'+esc(r.link)+'">abrir enlace</a>':"")+'</span>';
   var f=function(k,v){ return v?'<p><span class="k">'+k+'</span>'+esc(v)+'</p>':""; };
   $("lbBox").innerHTML='<div class="big">'+big+'</div><div class="inf"><h3>'+esc(r.tienda||"(sin tienda)")+'</h3><p><span class="chip '+r.res+'">'+RESL[r.res]+'</span></p>'+
-    f("Proyecto",r.proyecto)+f("Cadena",r.cadena)+f("Distrito",r.distrito)+f("Código",r.codigo)+f("OT / detalle",r.ot)+f("Fecha",dstr(r.fProg))+f("Merch",r.merch)+f("Observaciones",r.obs)+
+    f("Proyecto",r.proyecto)+f("Cadena",r.cadena)+f("Ubigeo",r.zona+(r.zonaInf?" (deducido)":""))+f("Ciudad",r.ciudad)+f("Distrito",r.distrito)+f("Código",r.codigo)+f("OT / detalle",r.ot)+f("Fecha",dstr(r.fProg))+f("Merch",r.merch)+f("Observaciones",r.obs)+
     (r.link?'<p><a target="_blank" rel="noopener noreferrer" href="'+esc(r.link)+'">Abrir foto original ↗</a></p>':"")+'</div>';
   placeLb(ev);
 }
@@ -334,13 +366,13 @@ function closeLb(){ $("lb").classList.remove("on"); $("lb").style.height=""; pos
 $("lb").onclick=function(e){ if(e.target===$("lb")) closeLb(); };
 document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeLb(); });
 
-["fProyecto","fCadena","fDistrito","fRes","fFoto","fSin","fDesde","fHasta"].forEach(function(id){ $(id).onchange=render; });
+["fProyecto","fCadena","fZona","fDistrito","fRes","fFoto","fSin","fDesde","fHasta"].forEach(function(id){ $(id).onchange=render; });
 /* elegir un mes limpia el rango manual (el rango, si existe, manda sobre el mes) */
 $("fMes").onchange=function(){ $("fDesde").value=""; $("fHasta").value=""; render(); };
 $("search").oninput=render;
 
 function onData(rows, sources, label){
-  ALL=rows; SOURCES=sources; $("app").hidden=false; buildFilters(); render();
+  inferZona(rows); ALL=rows; SOURCES=sources; $("app").hidden=false; buildFilters(); render();
   var st=$("status"); st.className="status ok"; st.textContent="✓ "+rows.length.toLocaleString("es-PE")+" registros · "+label;
 }
 function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
