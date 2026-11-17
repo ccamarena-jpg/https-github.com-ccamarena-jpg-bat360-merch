@@ -184,8 +184,16 @@ function findCols(h){
   if(map.link==null) for(var k=0;k<h.length;k++) if(h[k].indexOf("LINK")===0 && h[k].indexOf("COMODATO")<0){ map.link=k; break; }
   return map;
 }
+/* Recorta hojas que declaran un rango enorme (p. ej. A1:XFD2158) al rango real con datos; si no, convertirlas tarda minutos. */
+function sheetRows(ws){
+  var ref=ws["!ref"]; if(!ref) return [];
+  var rg=XLSX.utils.decode_range(ref), maxR=0, maxC=0;
+  Object.keys(ws).forEach(function(k){ if(k.charAt(0)==="!") return; var c=XLSX.utils.decode_cell(k); if(c.r>maxR) maxR=c.r; if(c.c>maxC) maxC=c.c; });
+  rg.e.r=Math.min(rg.e.r,maxR); rg.e.c=Math.min(rg.e.c,maxC);
+  return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false,range:rg});
+}
 function parseSheet(ws, proyecto){
-  var rows = XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false}), hi=-1, map=null;
+  var rows = sheetRows(ws), hi=-1, map=null;
   for(var i=0;i<Math.min(rows.length,15);i++){
     var m=findCols(rows[i].map(norm));
     if(m.tienda!=null && (m.status!=null || m.efect!=null)){ hi=i; map=m; break; }

@@ -144,7 +144,16 @@ function findHeader(rows){
   }
   return null;
 }
-function sheetRows(ws){ return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false}); }
+/* Algunas hojas declaran un rango enorme (p. ej. A1:XFD2158 = 16.384 columnas) aunque solo usen 11: se recorta al rango real de celdas con datos
+   (si no, convertir la hoja tarda minutos). El resultado se guarda en la hoja porque cada hoja se lee con más de un formato. */
+function sheetRows(ws){
+  if(ws.__rows) return ws.__rows;
+  var ref=ws["!ref"]; if(!ref) return (ws.__rows=[]);
+  var rg=XLSX.utils.decode_range(ref), maxR=0, maxC=0;
+  Object.keys(ws).forEach(function(k){ if(k.charAt(0)==="!") return; var c=XLSX.utils.decode_cell(k); if(c.r>maxR) maxR=c.r; if(c.c>maxC) maxC=c.c; });
+  rg.e.r=Math.min(rg.e.r,maxR); rg.e.c=Math.min(rg.e.c,maxC);
+  return (ws.__rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false,range:rg}));
+}
 function cellFn(row,map){ return function(k){ var v = map[k]==null ? "" : row[map[k]]; return v; }; }
 function txt(v){ return String(v==null?"":v).replace(/ /g," ").replace(/\s+/g," ").trim(); }
 
@@ -205,6 +214,29 @@ function parseKcSheet(name, ws, fileName){
   return out;
 }
 
+/* Provincia (KC), formato vigente: «PLANNING S8» es un registro corrido con una fila por merch y día
+   (CIUDAD, MERCH, DIA, FECHA, OT, POS VISITADOS, OBSERVACIONES DE AVANCE MERCH, COMENTARIOS…). La OT es la actividad del día («LS CORE», «LIMPIEZA HW»…), no una tienda. */
+function parseKcDaily(name, ws){
+  var rows=sheetRows(ws), hi=-1, map={};
+  for(var i=0;i<Math.min(rows.length,6);i++){
+    var h=rows[i].map(norm), ix=function(a){ for(var k=0;k<a.length;k++){ var q=h.indexOf(a[k]); if(q>=0) return q; } return -1; };
+    var m={ciudad:ix(["CIUDAD"]),merch:ix(["MERCH","MECH"]),fecha:ix(["FECHA"]),ot:ix(["OT"]),pos:ix(["POS VISITADOS","POS REALIZADOS"]),avance:ix(["OBSERVACIONES DE AVANCE MERCH"]),coment:ix(["COMENTARIOS"]),pdv:ix(["NOMBRE DEL PDV","POS","TIENDA","PDV"])};
+    if(m.ciudad>=0&&m.merch>=0&&m.fecha>=0&&m.ot>=0&&m.pdv<0){ hi=i; map=m; break; }
+  }
+  if(hi<0) return [];
+  var today=new Date(), lo=addDays(today,-7*CFG.semanasAtras), top=addDays(today,7*CFG.semanasAdelante), out=[];
+  for(var r=hi+1;r<rows.length;r++){
+    var row=rows[r], f=asDate(row[map.fecha]); if(!f||f<lo||f>top) continue;   // el registro llega a mayo de 2025: solo se toma la ventana de semanas
+    var ot=txt(row[map.ot]); if(!ot) continue;
+    var g=function(k){ return k==="ot"?ot:(k==="obs"&&map.coment>=0?txt(row[map.coment]):""); };
+    var e=mk("PROVINCIA",txt(row[map.merch]),txt(row[map.ciudad]),"",g,[key(f)],false,null);
+    e.tipo="ruta"; e.posVis=map.pos>=0?txt(row[map.pos]):""; e.avance=map.avance>=0?txt(row[map.avance]):"";
+    e.search=norm([e.merch,e.ciudad,e.ot,e.avance,e.obs].join(" "));
+    out.push(e);
+  }
+  return out;
+}
+
 /* ═══ Libros: elegir qué hojas leer ═══ */
 function visibleSheets(wb){ var meta=(wb.Workbook&&wb.Workbook.Sheets)||[]; return wb.SheetNames.filter(function(n,i){ return !(meta[i]&&meta[i].Hidden); }); }
 function parseBook(buf, fileName, zona){
@@ -214,7 +246,7 @@ function parseBook(buf, fileName, zona){
   var wb=XLSX.read(buf,{type:"array",cellDates:true,sheets:names});
   names.forEach(function(n){
     var ws=wb.Sheets[n]; if(!ws) return;
-    var r = zona==="LIMA" ? parseLimaSheet(n,ws) : parseKcSheet(n,ws,fileName);
+    var r = zona==="LIMA" ? parseLimaSheet(n,ws) : parseKcDaily(n,ws).concat(parseKcSheet(n,ws,fileName));
     if(r.length){ rows=rows.concat(r); used++; }
   });
   return {rows:rows, src:{zona:zona,file:fileName,hojas:used,filas:rows.length,nota: rows.length?"":"Sin hojas de planning reconocibles"}};
@@ -244,11 +276,11 @@ function render(){
   var showSun=list.some(function(e){ return e.days.indexOf(keys[6])>=0; }), ndays=showSun?7:6;
   $("wkLbl").textContent=fmt(weekStart)+" – "+fmt(addDays(weekStart,ndays-1))+" "+addDays(weekStart,ndays-1).getFullYear();
   var pdvs={}, merchs={}, lima=0, prov=0, multi=0;
-  list.forEach(function(e){ pdvs[e.pdv]=1; merchs[e.zona+e.merch]=1; if(e.zona==="LIMA") lima++; else prov++; if(e.multi) multi++; });
-  $("kpis").innerHTML=[["OT planificadas",list.length],["PDV distintos",Object.keys(pdvs).length],["Merch con ruta",Object.keys(merchs).length],["Lima",lima],["Provincia (KC)",prov],["OT con ventana de varios días",multi]]
+  list.forEach(function(e){ if(e.pdv) pdvs[e.pdv]=1; merchs[e.zona+e.merch]=1; if(e.zona==="LIMA") lima++; else prov++; if(e.multi) multi++; });
+  $("kpis").innerHTML=[["OT planificadas",list.length],["PDV distintos",Object.keys(pdvs).length],["Merch con ruta",Object.keys(merchs).length],["Lima",lima],["Provincia (KC) · actividades",prov],["OT con ventana de varios días",multi]]
     .map(function(k){ return '<div class="kpi"><b>'+k[1]+'</b><span>'+k[0]+'</span></div>'; }).join("");
   if(mode==="merch") boardMerch(list,keys.slice(0,ndays),todayK); else boardDia(list,keys.slice(0,ndays),todayK);
-  $("boardHint").textContent = list.length ? "Toca una celda o un día para ver las tiendas. Borde punteado = OT con ventana de varios días." : "No hay planning cargado para esta semana. Usa ◀ ▶ para moverte entre semanas.";
+  $("boardHint").textContent = list.length ? "Toca una celda o un día para ver el detalle. En Lima cada OT es una tienda; en provincia cada fila es la actividad del merch ese día. Borde punteado = ventana de varios días." : "No hay planning cargado para esta semana. Usa ◀ ▶ para moverte entre semanas.";
   renderSources(); postH();
 }
 function uniq(rows,k){ var s={}; rows.forEach(function(r){ if(r[k]) s[r[k]]=1; }); return Object.keys(s).sort(); }
@@ -263,7 +295,7 @@ function boardMerch(list, keys, todayK){
   var rl=Object.keys(rows).map(function(k){return rows[k];}).sort(function(a,b){ return a.zona===b.zona ? (a.merch>b.merch?1:-1) : (a.zona==="LIMA"?-1:1); });
   CELLS={}; var html='<table class="grid"><tr><th style="width:170px">Merch</th>'+keys.map(function(k,i){return dayHead(k,i,todayK);}).join("")+'</tr>';
   rl.forEach(function(r,ri){
-    html+='<tr><td class="who"><span class="z '+r.zona+'">'+(r.zona==="LIMA"?"LIMA":"KC")+'</span>'+esc(r.merch)+'<small>'+esc(Object.keys(r.ciudades).join(", "))+' · '+r.items.length+' OT</small></td>';
+    html+='<tr><td class="who"><span class="z '+r.zona+'">'+(r.zona==="LIMA"?"LIMA":"KC")+'</span>'+esc(r.merch)+'<small>'+esc(Object.keys(r.ciudades).join(", "))+' · '+r.items.length+(r.items[0].tipo==="ruta"?' act.':' OT')+'</small></td>';
     keys.forEach(function(k){
       var its=r.items.filter(function(e){ return e.days.indexOf(k)>=0; }), id=ri+"|"+k;
       if(!its.length){ html+='<td class="cell'+(k===todayK?" today":"")+'" data-c=""></td>'; return; }
@@ -290,8 +322,12 @@ function boardDia(list, keys, todayK){
 }
 $("board").onclick=function(e){ var t=e.target.closest("[data-c]"); if(!t||!t.dataset.c) return; var c=CELLS[t.dataset.c]; if(c) openLb(c,e); };
 function openLb(c,ev){
-  $("lbBox").innerHTML='<h3>'+esc(c.titulo)+' <span class="status">· '+c.items.length+' OT</span></h3><div class="scroll"><table class="plain"><tr><th>PDV</th><th>OT</th><th>Materiales</th><th>Distrito</th><th>Código</th><th>Observaciones</th></tr>'+
-    c.items.map(function(e){ return '<tr><td>'+esc(e.pdv)+(e.multi?' <span class="tag">ventana</span>':'')+(e.reprog?' <span class="tag">reprogramada · era '+fmt(e.reprog)+'</span>':'')+'</td><td>'+esc(e.ot)+'</td><td>'+esc(e.mat||e.cig)+'</td><td>'+esc(e.distrito||e.ciudad)+'</td><td>'+esc(e.codigo)+'</td><td>'+esc(e.obs)+'</td></tr>'; }).join("")+'</table></div>';
+  var ruta=c.items.length && c.items[0].tipo==="ruta";
+  $("lbBox").innerHTML='<h3>'+esc(c.titulo)+' <span class="status">· '+c.items.length+(ruta?' actividad':' OT')+(c.items.length===1?'':(ruta?'es':''))+'</span></h3><div class="scroll"><table class="plain">'+
+    (ruta ? '<tr><th>Ciudad</th><th>Actividad (OT)</th><th>POS visitados</th><th>Avance del merch</th><th>Comentarios</th></tr>'+
+      c.items.map(function(e){ return '<tr><td>'+esc(e.ciudad)+'</td><td>'+esc(e.ot)+'</td><td>'+esc(e.posVis)+'</td><td>'+esc(e.avance)+'</td><td>'+esc(e.obs)+'</td></tr>'; }).join("")
+    : '<tr><th>PDV</th><th>OT</th><th>Materiales</th><th>Distrito</th><th>Código</th><th>Observaciones</th></tr>'+
+      c.items.map(function(e){ return '<tr><td>'+esc(e.pdv)+(e.multi?' <span class="tag">ventana</span>':'')+(e.reprog?' <span class="tag">reprogramada · era '+fmt(e.reprog)+'</span>':'')+'</td><td>'+esc(e.ot)+'</td><td>'+esc(e.mat||e.cig)+'</td><td>'+esc(e.distrito||e.ciudad)+'</td><td>'+esc(e.codigo)+'</td><td>'+esc(e.obs)+'</td></tr>'; }).join(""))+'</table></div>';
   placeLb(ev);
 }
 function placeLb(ev){
@@ -359,12 +395,15 @@ function loadLive(silent){
         if(c) jobs.push({id:c.id,name:c.name,zona:"LIMA"});
       }) : null,
       prov ? kids(prov.id,t).then(function(items){
-        var f=items.filter(function(i){return i.folder && /PLANNING/i.test(i.name);})[0];     // PLANNING SEMANAL: un archivo por semana (o varios)
+        /* Provincia (KC): el archivo PLANNING* más reciente de la carpeta (hoy «PLANNING - KC (1).xlsx», hoja PLANNING S8: una fila por merch y día). */
+        var main=items.filter(isPlan).sort(function(a,b){ return a.lastModifiedDateTime<b.lastModifiedDateTime?1:-1; })[0];
+        if(main){ jobs.push({id:main.id,name:main.name,zona:"PROVINCIA"}); return null; }
+        var f=items.filter(function(i){return i.folder && /PLANNING/i.test(i.name);})[0];     // respaldo: PLANNING SEMANAL (un archivo por semana)
         return f ? kids(f.id,t).then(function(fs){ fs.filter(isPlan).forEach(function(i){ jobs.push({id:i.id,name:i.name,zona:"PROVINCIA"}); }); }) : null;
       }) : null
     ]);
   }).then(function(){
-    if(!jobs.length) throw new Error("No encontré archivos de planning (nombre con «PLANNING») en LIMA ni en PROVINCIA/PLANNING SEMANAL.");
+    if(!jobs.length) throw new Error("No encontré archivos de planning (nombre con «PLANNING») en LIMA ni en PROVINCIA.");
     var rows=[], sources=[], done=0;
     return Promise.all(jobs.map(function(j){
       return gfetch(G+"/items/"+j.id+"/content",t).then(function(r){return r.arrayBuffer();}).then(function(b){ setSt("Procesando "+j.name+"…"); var r=parseBook(b,j.name,j.zona); rows=rows.concat(r.rows); sources.push(r.src); })
