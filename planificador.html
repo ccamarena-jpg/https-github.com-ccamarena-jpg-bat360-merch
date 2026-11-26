@@ -97,6 +97,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="fast.js"></script>
 <script>
 /* ═══ Config: planning de merchs en el OneDrive de acastro (carpeta PROYECTO INTERNO), vía Microsoft Graph ═══ */
 window.PLAN = {
@@ -105,6 +106,7 @@ window.PLAN = {
   scopes:   ["Files.Read.All"],
   driveId:  "b!ftpx1PHMU02Xyd_BvRi5gZ4jKtzFMjZHt1vZTICVWd0sPgcGYMRfTZopqpx_5vTB",
   internoId:"015HP6ULN2WWREFL2KPNH2KB73WALNEZOT",   // PROYECTOS ACTUALES / PROYECTO INTERNO  (contiene LIMA y PROVINCIA)
+  schema:   "plan2",   // súbelo si cambia lo que devuelve parseBook: invalida la caché local
   year:     2026,   // año de las fechas sin año; en Lima el año se deduce del día de la semana de la hoja
   semanasAtras: 12, semanasAdelante: 8   // solo se leen hojas de Lima dentro de esta ventana (el archivo tiene cientos)
 };
@@ -243,7 +245,7 @@ function parseBook(buf, fileName, zona){
   var cheap=XLSX.read(buf,{type:"array",bookSheets:true}), names=visibleSheets(cheap), rows=[], used=0;
   var today=new Date(), lo=addDays(today,-7*CFG.semanasAtras), hi=addDays(today,7*CFG.semanasAdelante);
   if(zona==="LIMA") names=names.filter(function(n){ var d=limaSheetDate(n); return d && d>=lo && d<=hi; });
-  var wb=XLSX.read(buf,{type:"array",cellDates:true,sheets:names});
+  var wb=XLSX.read(buf,FAST.lean({type:"array",cellDates:true,sheets:names}));
   names.forEach(function(n){
     var ws=wb.Sheets[n]; if(!ws) return;
     var r = zona==="LIMA" ? parseLimaSheet(n,ws) : parseKcDaily(n,ws).concat(parseKcSheet(n,ws,fileName));
@@ -381,6 +383,7 @@ function kids(id,t){ return gfetch(G+"/items/"+id+"/children?$select=id,name,siz
 var isXlsx=function(i){ return i.file && /\.xls[xm]$/i.test(i.name) && i.name.indexOf("~$")!==0; };
 var isPlan=function(i){ return isXlsx(i) && /PLANNING/i.test(i.name) && !/SEGUIMIENTO|PRODUCTIVIDAD/i.test(i.name); };
 
+function job(i,zona){ return {id:i.id,name:i.name,zona:zona,v:FAST.ver(i,FAST.day())}; }
 function loadLive(silent){
   if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y buscando los planning…");
   var t, jobs=[];
@@ -392,26 +395,31 @@ function loadLive(silent){
       lima ? kids(lima.id,t).then(function(items){
         /* Lima: el archivo de planning más reciente (se va renombrando: SET (3), (4)…) */
         var c=items.filter(isPlan).sort(function(a,b){ return a.lastModifiedDateTime<b.lastModifiedDateTime?1:-1; })[0];
-        if(c) jobs.push({id:c.id,name:c.name,zona:"LIMA"});
+        if(c) jobs.push(job(c,"LIMA"));
       }) : null,
       prov ? kids(prov.id,t).then(function(items){
         /* Provincia (KC): el archivo PLANNING* más reciente de la carpeta (hoy «PLANNING - KC (1).xlsx», hoja PLANNING S8: una fila por merch y día). */
         var main=items.filter(isPlan).sort(function(a,b){ return a.lastModifiedDateTime<b.lastModifiedDateTime?1:-1; })[0];
-        if(main){ jobs.push({id:main.id,name:main.name,zona:"PROVINCIA"}); return null; }
+        if(main){ jobs.push(job(main,"PROVINCIA")); return null; }
         var f=items.filter(function(i){return i.folder && /PLANNING/i.test(i.name);})[0];     // respaldo: PLANNING SEMANAL (un archivo por semana)
-        return f ? kids(f.id,t).then(function(fs){ fs.filter(isPlan).forEach(function(i){ jobs.push({id:i.id,name:i.name,zona:"PROVINCIA"}); }); }) : null;
+        return f ? kids(f.id,t).then(function(fs){ fs.filter(isPlan).forEach(function(i){ jobs.push(job(i,"PROVINCIA")); }); }) : null;
       }) : null
     ]);
   }).then(function(){
     if(!jobs.length) throw new Error("No encontré archivos de planning (nombre con «PLANNING») en LIMA ni en PROVINCIA.");
-    var rows=[], sources=[], done=0;
+    var rows=[], sources=[], done=0, cached=0;
     return Promise.all(jobs.map(function(j){
-      return gfetch(G+"/items/"+j.id+"/content",t).then(function(r){return r.arrayBuffer();}).then(function(b){ setSt("Procesando "+j.name+"…"); var r=parseBook(b,j.name,j.zona); rows=rows.concat(r.rows); sources.push(r.src); })
+      var ckey="plan:"+CFG.schema+":"+j.id;
+      return FAST.get(ckey).then(function(c){
+        if(c && c.v===j.v){ rows=rows.concat(c.rows); sources.push(c.src); cached++; return; }       // sin cambios: no se descarga
+        return gfetch(G+"/items/"+j.id+"/content",t).then(function(r){return r.arrayBuffer();}).then(function(b){ setSt("Procesando "+j.name+"…"); var r=parseBook(b,j.name,j.zona); rows=rows.concat(r.rows); sources.push(r.src); FAST.set(ckey,{v:j.v,rows:r.rows,src:r.src}); });
+      })
       .catch(function(e){ sources.push({zona:j.zona,file:j.name,hojas:0,filas:0,nota:"Error al leer: "+((e&&e.message)||e)}); })
       .then(function(){ done++; setSt("Leyendo planning… "+done+" de "+jobs.length); });
-    })).then(function(){ return {rows:rows,sources:sources}; });
+    })).then(function(){ return {rows:rows,sources:sources,cached:cached,total:jobs.length}; });
   }).then(function(res){
-    onData(res.rows,res.sources,"SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false;
+    FAST.set("plan:last:"+CFG.schema,{rows:res.rows,sources:res.sources,savedAt:Date.now()});
+    onData(res.rows,res.sources,"SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})+(res.cached===res.total?" · sin cambios desde la última vez (no se descargó de nuevo)":"")); $("msRefresh").hidden=false;
   }).catch(function(err){
     var m=(err&&err.message)||String(err);
     if(silent && (m==="no-account"||m==="silent-failed")) return;
@@ -433,6 +441,8 @@ function initMs(){
   $("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
 }
 if(/[?&]fuentes/.test(location.search)) $("srcCard").hidden=false;   // diagnóstico: añade ?fuentes a la URL
+/* Al abrir: lo último guardado se muestra al instante mientras se revisa si hay algo nuevo en SharePoint. */
+FAST.get("plan:last:"+CFG.schema).then(function(c){ if(c && !ALL.length) onData(c.rows,c.sources,"datos guardados "+FAST.ago(c.savedAt)+" · revisando si hay cambios…"); });
 initMs(); postH();
 })();
 </script>

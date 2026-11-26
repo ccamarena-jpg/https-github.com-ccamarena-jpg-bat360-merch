@@ -95,6 +95,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="fast.js"></script>
 <script>
 /* ═══ Config: consolidado de Merch (archivo "Crish") en el OneDrive de acastro, vía Microsoft Graph ═══
    Mismo registro de Entra que el radar (app "bat360"). Falta autorizar el Redirect URI de este sitio (ver README). */
@@ -105,6 +106,7 @@ window.CONS = {
   driveId:  "b!ftpx1PHMU02Xyd_BvRi5gZ4jKtzFMjZHt1vZTICVWd0sPgcGYMRfTZopqpx_5vTB",
   itemId:   "015HP6ULNI7DK2HDKMWJE3MICO6AEXORUF",           // Crish (1) (1).xlsx  (se conserva aunque lo muevan/renombren)
   sheet:    "NUEVO 2222",
+  schema:   "cons2",   // súbelo si cambia lo que devuelve parseSheet: invalida la caché local
   year:     2026   // año de las fechas escritas sin año ("19-feb"). Cámbialo al empezar un año nuevo; no se usa la fecha de hoy.
 };
 
@@ -296,7 +298,7 @@ window.addEventListener("resize",postH);
 
 /* ═══ Carga manual ═══ */
 function parseBuffer(buf){
-  var wb=XLSX.read(buf,{type:"array",cellDates:true,sheets:CFG.sheet});
+  var wb=XLSX.read(buf,FAST.lean({type:"array",cellDates:true,sheets:CFG.sheet}));
   var ws=wb.Sheets[CFG.sheet] || (wb.SheetNames.length===1 ? wb.Sheets[wb.SheetNames[0]] : null);
   if(!ws) throw new Error('No existe la hoja "'+CFG.sheet+'" en el archivo.');
   return parseSheet(ws);
@@ -318,11 +320,20 @@ function token(interactive){
   return msalApp.loginPopup(req).then(function(r){ $("msUser").textContent=r.account.username; return r.accessToken; });
 }
 function loadLive(silent){
-  if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y descargando el consolidado (≈15 MB, puede tardar)…");
-  token(!silent).then(function(t){
-    return fetch("https://graph.microsoft.com/v1.0/drives/"+CFG.driveId+"/items/"+CFG.itemId+"/content",{headers:{Authorization:"Bearer "+t}});
-  }).then(function(res){ if(!res.ok) throw new Error("Graph HTTP "+res.status); setSt("Procesando hoja "+CFG.sheet+"…"); return res.arrayBuffer(); })
-  .then(function(buf){ onData(parseBuffer(buf),"SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false; })
+  if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y revisando si el consolidado cambió…");
+  var base="https://graph.microsoft.com/v1.0/drives/"+CFG.driveId+"/items/"+CFG.itemId, key="cons:"+CFG.schema, hora=new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"}), t;
+  /* El consolidado pesa ≈14 MB: leerlo es rápido, descargarlo no. Se consulta solo su fecha de modificación (unos bytes) y únicamente se descarga si cambió desde la última vez. */
+  token(!silent).then(function(tk){ t=tk; return fetch(base+"?$select=id,lastModifiedDateTime,size",{headers:{Authorization:"Bearer "+t}}); })
+  .then(function(res){ if(!res.ok) throw new Error("Graph HTTP "+res.status); return res.json(); })
+  .then(function(meta){
+    var v=FAST.ver(meta);
+    return FAST.get(key).then(function(c){
+      if(c && c.v===v){ onData(c.rows,"SharePoint en vivo · "+hora+" · sin cambios desde la última vez (no se descargó de nuevo)"); $("msRefresh").hidden=false; return; }
+      setSt("Descargando el consolidado ("+(meta.size/1048576).toFixed(0)+" MB, solo cuando cambia)…");
+      return fetch(base+"/content",{headers:{Authorization:"Bearer "+t}}).then(function(res){ if(!res.ok) throw new Error("Graph HTTP "+res.status); setSt("Procesando hoja "+CFG.sheet+"…"); return res.arrayBuffer(); })
+        .then(function(buf){ var rows=parseBuffer(buf); FAST.set(key,{v:v,rows:rows,savedAt:Date.now()}); onData(rows,"SharePoint en vivo · "+hora); $("msRefresh").hidden=false; });
+    });
+  })
   .catch(function(err){
     var m=(err&&err.message)||String(err);
     if(silent && (m==="no-account"||m==="silent-failed")) return;
@@ -364,6 +375,8 @@ $("sampleBtn").onclick=function(){
   onData(rows,"DATOS DE EJEMPLO (no son el consolidado real)");
 };
 
+/* Al abrir: lo último guardado se muestra al instante mientras se revisa si hay algo nuevo en SharePoint. */
+FAST.get("cons:"+CFG.schema).then(function(c){ if(c && !ALL.length) onData(c.rows,"datos guardados "+FAST.ago(c.savedAt)+" · revisando si hay cambios…"); });
 initMs(); postH();
 })();
 </script>

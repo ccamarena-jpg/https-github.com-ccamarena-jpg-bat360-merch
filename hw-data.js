@@ -9,11 +9,12 @@ var CFG = {
   driveId:  "b!ftpx1PHMU02Xyd_BvRi5gZ4jKtzFMjZHt1vZTICVWd0sPgcGYMRfTZopqpx_5vTB",
   folderId: "015HP6ULJFS5ISEVNR5JC2CPNZJLQQB4NO",   // PLAN / PROYECTOS ACTUALES / HW  (el archivo se renombra en cada corte: se toma el más reciente)
   sheet:    "BBDD",
+  schema:   "hw2",       // súbelo si cambia lo que parseBook devuelve: invalida la caché local
   /* Excel histórico de cortes (lo escribe bat-merch/tools/guardar_corte_hw.py). Está en el OneDrive de Claudia: hay que compartirlo con quien use la vista. */
   cortes:   { driveId: "b!NpQ7a93VQkOL-yt8XpCvELSu8zBzw0hChMPffAg5mBs_yxFrMcD7QKFa-_Ao0MIL", itemId: "01FD7R7ECU6CYHD6WMPJDZVQEFCEPJZ5IO" },
   maxQty:   10                                       // cantidades mayores se consideran error de digitación (se cuenta 1 y se avisa)
 };
-var G = "https://graph.microsoft.com/v1.0/drives/"+CFG.driveId;
+var G0 = "https://graph.microsoft.com/v1.0", G = G0+"/drives/"+CFG.driveId;
 
 function norm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim().toUpperCase(); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
@@ -64,8 +65,8 @@ function findHeader(rows){
 /* Devuelve {rows, meta:{filas, avisos}} desde un ArrayBuffer. Solo lee la hoja BBDD (o la hoja con esos encabezados). */
 function parseBook(buf){
   var cheap=XLSX.read(buf,{type:"array",bookSheets:true}), name=cheap.SheetNames.indexOf(CFG.sheet)>=0?CFG.sheet:null, ws, wb;
-  if(name){ wb=XLSX.read(buf,{type:"array",sheets:[name]}); ws=wb.Sheets[name]; }
-  else { wb=XLSX.read(buf,{type:"array"}); for(var i=0;i<wb.SheetNames.length&&!ws;i++){ var w=wb.Sheets[wb.SheetNames[i]], rr=XLSX.utils.sheet_to_json(w,{header:1,range:0,defval:""}).slice(0,8); if(findHeader(rr)) ws=w; } }
+  if(name){ wb=XLSX.read(buf,FAST.lean({type:"array",sheets:[name]})); ws=wb.Sheets[name]; }
+  else { wb=XLSX.read(buf,FAST.lean({type:"array"})); for(var i=0;i<wb.SheetNames.length&&!ws;i++){ var w=wb.Sheets[wb.SheetNames[i]], rr=XLSX.utils.sheet_to_json(w,{header:1,range:0,defval:""}).slice(0,8); if(findHeader(rr)) ws=w; } }
   if(!ws) throw new Error("No encontré la hoja BBDD (ID STORE / CIUDAD / CADENA) en el archivo.");
   var rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""}), H=findHeader(rows);
   if(!H) throw new Error("No encontré los encabezados de la hoja BBDD.");
@@ -166,25 +167,57 @@ function versions(t,item){
 /* Excel histórico de cortes: hojas Cortes / Resumen / Activos / PDV (ver tools/guardar_corte_hw.py). Devuelve {lista, get(id)→snapshot}. */
 function cortesLoad(t){
   var c=CFG.cortes; if(!c||!c.itemId) return Promise.reject(new Error("No hay Excel de cortes configurado."));
-  return gfetch("https://graph.microsoft.com/v1.0/drives/"+c.driveId+"/items/"+c.itemId+"/content",t).then(function(r){return r.arrayBuffer();}).then(function(buf){
-    var wb=XLSX.read(buf,{type:"array"});
-    var rows=function(n){ return wb.Sheets[n] ? XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:""}).slice(1).filter(function(r){return r[0]!=="";}) : []; };
-    var cortes=rows("Cortes").map(function(r){ return {id:String(r[0]),archivo:String(r[1]),pdv:+r[2]||0,activos:+r[9]||0,tot:{pdv:+r[2]||0,cig:+r[3]||0,disp:+r[4]||0,glor:+r[5]||0,vol:+r[6]||0,tv:+r[7]||0,esp:+r[8]||0,total:+r[9]||0,ciudades:0},guardado:String(r[11]||"")}; })
-      .sort(function(a,b){ return a.id<b.id?1:-1; });
-    var resumen=rows("Resumen"), activos=rows("Activos"), pdv=rows("PDV");
-    function get(id){
-      var cut=cortes.filter(function(x){return x.id===id;})[0]; if(!cut) return Promise.reject(new Error("Corte no encontrado en el Excel de cortes."));
-      var dims={ciudad:[],cadena:[],zona:[]};
-      resumen.forEach(function(r){ if(String(r[0])===id && dims[r[1]]) dims[r[1]].push({k:String(r[2]),pdv:+r[3],cig:+r[4],disp:+r[5],glor:+r[6],vol:+r[7],tv:+r[8],esp:+r[9],total:+r[10]}); });
-      cut.tot.ciudades=dims.ciudad.length;
-      var act=[]; activos.forEach(function(r){ if(String(r[0])===id) act.push({cat:String(r[1]),act:String(r[2]),pdv:+r[3],units:+r[4]}); });
-      var dict={ciudad:[],cadena:[],zona:[]}, idx={ciudad:{},cadena:{},zona:{}}, pos={}, list=[];
-      var di=function(k,v){ var m=idx[k]; if(m[v]==null){ m[v]=dict[k].length; dict[k].push(v); } return m[v]; };
-      pdv.forEach(function(r){ if(String(r[0])!==id) return; var pid=String(r[1]); pos[pid]=String(r[2]); list.push([pid,di("ciudad",String(r[5])),di("cadena",String(r[6])),di("zona",String(r[3])),String(r[8]),+r[7]]); });
-      return Promise.resolve({corte:id,archivo:cut.archivo,tot:cut.tot,dims:dims,activos:act,dict:dict,pdv:list,pos:pos});
-    }
-    return {lista:cortes,get:get};
+  var base=G0+"/drives/"+c.driveId+"/items/"+c.itemId, key="hwcortes:"+CFG.schema;
+  /* Solo se descarga el Excel de cortes si cambió (versión = fecha de modificación + tamaño); si no, se usan las hojas ya leídas. */
+  return gfetch(base+"?$select=id,lastModifiedDateTime,size",t).then(function(r){return r.json();}).then(function(meta){
+    var v=FAST.ver(meta);
+    return FAST.get(key).then(function(cache){
+      if(cache && cache.v===v) return cortesBuild(cache.data);
+      return gfetch(base+"/content",t).then(function(r){return r.arrayBuffer();}).then(function(buf){
+        var wb=XLSX.read(buf,FAST.lean({type:"array"}));
+        var rows=function(n){ return wb.Sheets[n] ? XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:""}).slice(1).filter(function(r){return r[0]!=="";}) : []; };
+        var data={cortes:rows("Cortes"),resumen:rows("Resumen"),activos:rows("Activos"),pdv:rows("PDV")};
+        FAST.set(key,{v:v,data:data});
+        return cortesBuild(data);
+      });
+    });
   });
+}
+function cortesBuild(data){
+  var cortes=data.cortes.map(function(r){ return {id:String(r[0]),archivo:String(r[1]),pdv:+r[2]||0,activos:+r[9]||0,tot:{pdv:+r[2]||0,cig:+r[3]||0,disp:+r[4]||0,glor:+r[5]||0,vol:+r[6]||0,tv:+r[7]||0,esp:+r[8]||0,total:+r[9]||0,ciudades:0},guardado:String(r[11]||"")}; })
+    .sort(function(a,b){ return a.id<b.id?1:-1; });
+  var resumen=data.resumen, activos=data.activos, pdv=data.pdv;
+  function get(id){
+    var cut=cortes.filter(function(x){return x.id===id;})[0]; if(!cut) return Promise.reject(new Error("Corte no encontrado en el Excel de cortes."));
+    var dims={ciudad:[],cadena:[],zona:[]};
+    resumen.forEach(function(r){ if(String(r[0])===id && dims[r[1]]) dims[r[1]].push({k:String(r[2]),pdv:+r[3],cig:+r[4],disp:+r[5],glor:+r[6],vol:+r[7],tv:+r[8],esp:+r[9],total:+r[10]}); });
+    cut.tot.ciudades=dims.ciudad.length;
+    var act=[]; activos.forEach(function(r){ if(String(r[0])===id) act.push({cat:String(r[1]),act:String(r[2]),pdv:+r[3],units:+r[4]}); });
+    var dict={ciudad:[],cadena:[],zona:[]}, idx={ciudad:{},cadena:{},zona:{}}, pos={}, list=[];
+    var di=function(k,v){ var m=idx[k]; if(m[v]==null){ m[v]=dict[k].length; dict[k].push(v); } return m[v]; };
+    pdv.forEach(function(r){ if(String(r[0])!==id) return; var pid=String(r[1]); pos[pid]=String(r[2]); list.push([pid,di("ciudad",String(r[5])),di("cadena",String(r[6])),di("zona",String(r[3])),String(r[8]),+r[7]]); });
+    return Promise.resolve({corte:id,archivo:cut.archivo,tot:cut.tot,dims:dims,activos:act,dict:dict,pdv:list,pos:pos});
+  }
+  return {lista:cortes,get:get};
+}
+/* Archivo vigente de Hardware ya procesado: si no cambió desde la última vez (misma versión) no se descarga ni se vuelve a leer. */
+function loadCurrent(t){
+  var key="hw:"+CFG.schema;
+  return findFile(t).then(function(item){
+    var v=FAST.ver(item);
+    return FAST.get(key).then(function(c){
+      if(c && c.v===v) return {item:item,res:{rows:c.rows,meta:c.meta},cache:true,savedAt:c.savedAt};
+      return download(t,item).then(function(buf){
+        var res=parseBook(buf), now=Date.now();
+        FAST.set(key,{v:v,rows:res.rows,meta:res.meta,item:{name:item.name,lastModifiedDateTime:item.lastModifiedDateTime,size:item.size},savedAt:now});
+        return {item:item,res:res,cache:false,savedAt:now};
+      });
+    });
+  });
+}
+/* Lo último guardado, para mostrarlo al abrir la vista mientras se revisa si hay algo nuevo. */
+function cachedLast(){
+  return FAST.get("hw:"+CFG.schema).then(function(c){ return c ? {res:{rows:c.rows,meta:c.meta},item:c.item,savedAt:c.savedAt} : null; });
 }
 function errorMsg(err){
   var m=(err&&err.message)||String(err);
@@ -195,5 +228,5 @@ function errorMsg(err){
   return m;
 }
 return { CFG:CFG, norm:norm, esc:esc, parseBook:parseBook, byDim:byDim, byActivo:byActivo, totals:totals, snapshot:snapshot, compareSnaps:compareSnaps, DIMS:DIMS, CITY:CITY,
-  auth:{init:initAuth,token:token}, graph:{findFile:findFile,download:download,versions:versions,cortes:cortesLoad}, errorMsg:errorMsg };
+  auth:{init:initAuth,token:token}, graph:{findFile:findFile,download:download,versions:versions,cortes:cortesLoad,loadCurrent:loadCurrent,cachedLast:cachedLast}, errorMsg:errorMsg };
 })();

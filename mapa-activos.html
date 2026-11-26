@@ -66,6 +66,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="fast.js"></script>
 <script src="hw-data.js"></script>
 <script>
 (function(){
@@ -149,13 +150,14 @@ var busy=false;
 function loadLive(silent){
   if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y buscando el archivo de Hardware…");
   var t;
-  HW.auth.token(!silent).then(function(tk){ t=tk; return HW.graph.findFile(t); })
-  .then(function(item){ ITEM=item; setSt("Descargando "+item.name+" ("+(item.size/1048576).toFixed(1)+" MB)…"); return HW.graph.download(t,item); })
-  .then(function(buf){ setSt("Procesando hoja BBDD…"); onData(HW.parseBook(buf),ITEM.name+" · SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})); $("msRefresh").hidden=false; })
+  HW.auth.token(!silent).then(function(tk){ t=tk; if(!silent) setSt("Revisando si el archivo de Hardware cambió…"); return HW.graph.loadCurrent(t); })
+  .then(function(r){ ITEM=r.item; onData(r.res,ITEM.name+" · SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})+(r.cache?" · sin cambios desde la última vez (no se descargó de nuevo)":"")); $("msRefresh").hidden=false; })
   .catch(function(err){ var m=(err&&err.message)||""; if(silent && (m==="no-account"||m==="silent-failed")) return; fail(err); })
   .finally(function(){ busy=false; });
 }
 $("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
+/* Al abrir: lo último guardado se muestra al instante mientras se revisa si hay algo nuevo en SharePoint. */
+HW.graph.cachedLast().then(function(c){ if(c && !ALL.length) onData(c.res,(c.item?c.item.name+" · ":"")+"datos guardados "+FAST.ago(c.savedAt)+" · revisando si hay cambios…"); });
 HW.auth.init(function(u){ $("msUser").textContent=u; }).then(function(has){ if(!has){ if(typeof msal==="undefined") $("msConnect").hidden=true; return; } loadLive(true); });
 postH();
 })();
