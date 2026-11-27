@@ -27,6 +27,9 @@ window.SITE = {
     { id: 'mapa-activos', seccion: 'Hardware', icono: '🗺️', titulo: 'Mapa de activos',
       sub: 'Mapa de calor del Perú con los activos (PDV, cigarreras, dispensers, glorificadores, TV o un modelo concreto), por ciudad.',
       src: 'mapa-activos.html' },
+    { id: 'inventarios', seccion: 'Hardware', icono: '📦', titulo: 'Inventarios',
+      sub: 'Inventario de activos y materiales: Lima (Stock Odoo: Chilca y Chorrillos) y provincia (Google Sheet), en buen y mal estado.',
+      src: 'inventarios.html' },
     { id: 'inicio', seccion: 'Merch', icono: '🏠', titulo: 'Inicio',
       sub: 'Espacio de Merch de BAT 360. Aquí se irán sumando las vistas.',
       src: 'inicio.html' }

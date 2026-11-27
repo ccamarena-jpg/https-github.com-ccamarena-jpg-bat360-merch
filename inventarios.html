@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventarios · BAT 360 Merch</title>
+<style>
+  :root{ --bg:#ffffff; --txt:#1b2a47; --muted:#6c7a92; --line:#dde4ee; --brand:#1d3b78; --soft:#f2f5fa; --good:#1f9d57; --bad:#d6453d; --warn:#e0a100; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#1F2224; --txt:#EDEBE5; --muted:#9C9A92; --line:#33363A; --brand:#7FB4D4; --soft:#26292B; --good:#4cc283; --bad:#ef7a73; --warn:#f0c040; } }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
+  h3{font-size:14px;margin:0 0 8px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{background:var(--soft);border:1px solid var(--line);color:var(--txt);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600}
+  .btn:hover{background:var(--line)} .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)} .btn[hidden]{display:none}
+  .status{font-size:12.5px;color:var(--muted)} .status.ok{color:var(--good)} .status.err{color:var(--bad)}
+  .srcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;margin:0 0 14px}
+  .src{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:10px 13px}
+  .src b{display:block;font-size:12.5px;margin-bottom:2px}
+  .src .status{display:block;margin:3px 0 6px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 12px}
+  .tab{padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--bg);cursor:pointer;font-size:12.5px;color:var(--muted);font-weight:600}
+  .tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 14px;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px;align-items:end}
+  .filters label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+  select,input[type=text]{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--txt);font-size:13px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:0 0 16px}
+  .kpi{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .kpi b{display:block;font-size:24px;line-height:1.15} .kpi span{font-size:11.5px;color:var(--muted)}
+  .good{color:var(--good)} .bad{color:var(--bad)}
+  .card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);white-space:nowrap;position:sticky;top:0;background:var(--soft)}
+  td.n,th.n{text-align:right;white-space:nowrap}
+  .scroll{overflow-x:auto;max-height:520px;overflow-y:auto}
+  .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;min-width:70px} .bar i{display:block;height:100%;background:var(--bad)}
+  .hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
+  .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+  .obs{color:var(--muted);font-size:12px;max-width:380px}
+  a{color:var(--brand)}
+  .empty{padding:26px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="srcs">
+  <div class="src">
+    <b>📦 Lima · Stock Odoo</b>
+    <span class="status" id="stLima">Sin datos todavía.</span>
+    <div class="row">
+      <button class="btn primary" id="msConnect">🔐 Conectar con SharePoint</button>
+      <button class="btn" id="limaRefresh" hidden>🔄 Actualizar</button>
+      <label class="btn" style="margin:0">📂 Cargar Excel<input type="file" id="fileLima" accept=".xlsx,.xlsm,.xls" hidden></label>
+      <span class="status" id="msUser"></span>
+    </div>
+  </div>
+  <div class="src">
+    <b>🗺️ Provincia · Google Sheets (Inventario Provincia BAT v2)</b>
+    <span class="status" id="stProv">Sin datos todavía.</span>
+    <div class="row">
+      <button class="btn primary" id="provRefresh">🔄 Leer Google Sheet</button>
+      <label class="btn" style="margin:0">📂 Cargar Excel/CSV<input type="file" id="fileProv" accept=".xlsx,.xlsm,.xls,.csv" hidden></label>
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab on" data-t="lima">📦 Lima (Chilca y Chorrillos)</div>
+  <div class="tab" data-t="prov">🗺️ Provincia</div>
+</div>
+
+<div id="vLima"></div>
+<div id="vProv" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="fast.js"></script>
+<script src="hw-data.js"></script>
+<script>
+"use strict";
+/* ═══ Configuración ═══ */
+var CFG = {
+  schema: "inv1",   // súbelo si cambia lo que devuelven los parsers: invalida la caché local
+  /* Lima: archivo «Stock Odoo» de la carpeta BAT 360 Merch (OneDrive de acastro). Se busca por nombre; si no, se prueba una copia junto a esta página. */
+  limaNombre: "Stock Odoo",
+  limaLocal: "Stock Odoo.xlsx",
+  /* Provincia: Google Sheet «Inventario Provincia BAT v2», hoja ACTUAL (gid). Debe estar compartido como «cualquier persona con el enlace – lector»; si no, usa «Cargar Excel/CSV». */
+  sheetId: "1fQVTztH2ZhkLerU4Vl-Y6Xmm6nGnyUvw0nU9hRpIZDo",
+  sheetGid: "619741452",
+  sheetHoja: "ACTUAL"
+};
+var $ = function(id){ return document.getElementById(id); };
+var norm = HW.norm, esc = HW.esc;
+var S = { lima:null, prov:null, tab:"lima", fl:{alm:"",est:"",cat:"",q:""}, fp:{ciu:"",cat:"",est:"",q:""} };
+function num(v){ var n=parseFloat(String(v==null?"":v).replace(",",".")); return isNaN(n)?0:n; }
+function fmt(n){ return (Math.round(n*100)/100).toLocaleString("es-PE"); }
+function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
+function setSt(id,t,cls){ var e=$(id); e.textContent=t; e.className="status"+(cls?" "+cls:""); }
+function colOf(hdr, pats){ for(var i=0;i<hdr.length;i++){ var h=norm(hdr[i]); for(var j=0;j<pats.length;j++) if(h.indexOf(pats[j])>=0) return i; } return -1; }
+function opts(sel, arr, all){ sel.innerHTML='<option value="">'+all+'</option>'+arr.map(function(x){ return '<option>'+esc(x)+'</option>'; }).join(""); }
+function uniq(rows,k){ var s={}; rows.forEach(function(r){ if(r[k]) s[r[k]]=1; }); return Object.keys(s).sort(); }
+
+/* ═══ Lima: Stock Odoo ═══ */
+function parseLima(buf){
+  var wb=XLSX.read(buf,{type:"array"}), ws=wb.Sheets[wb.SheetNames[0]];
+  var a=XLSX.utils.sheet_to_json(ws,{header:1,defval:"",raw:true});
+  var h=0; for(var i=0;i<Math.min(a.length,10);i++){ if(a[i].some(function(c){ return norm(c).indexOf("NOMBRE DEL PRODUCTO")>=0; })){ h=i; break; } }
+  var hd=a[h], c={ ub:colOf(hd,["UBICACION"]), pr:colOf(hd,["NOMBRE DEL PRODUCTO","PRODUCTO"]), ca:colOf(hd,["CATEGORIA"]), ref:colOf(hd,["REFERENCIA"]),
+    qty:colOf(hd,["CANTIDAD EN INVENTARIO","CANTIDAD"]), pc:colOf(hd,["PALLETS CHILCA"]), ph:colOf(hd,["PALLETS CHORRILLOS"]), foto:colOf(hd,["FOTO"]), msg:colOf(hd,["MENSAJE","COMENTARIO"]) };
+  if(c.pr<0||c.qty<0||c.ub<0) throw new Error("No reconozco las columnas de Stock Odoo (Ubicación, Nombre del producto, Cantidad en inventario).");
+  var rows=[];
+  for(var r=h+1;r<a.length;r++){
+    var x=a[r]; if(!x[c.pr]) continue;
+    var ub=String(x[c.ub]||""), p=ub.split("/"), alm=(p[0]||"").trim(), est=norm(p[1]||"");
+    var catFull=String(x[c.ca]||"").trim();
+    rows.push({ alm:alm||"—", est: est.indexOf("MAL")>=0?"Mal estado":(est.indexOf("BUEN")>=0?"Buen estado":(p[1]||"—").trim()),
+      prod:String(x[c.pr]).trim(), catFull:catFull, cat:catFull.split(" / ")[0].trim()||"Sin categoría", ref:String(x[c.ref]||"").trim(),
+      qty:num(x[c.qty]), pal:num(alm.toUpperCase().indexOf("CHORR")>=0?x[c.ph]:x[c.pc]), foto:String(x[c.foto]||"").trim(), msg:String(x[c.msg]||"").trim() });
+  }
+  return rows;
+}
+var G0="https://graph.microsoft.com/v1.0";
+function gf(url,t){ return fetch(url,{headers:{Authorization:"Bearer "+t}}).then(function(r){ if(!r.ok) throw new Error("Graph HTTP "+r.status); return r; }); }
+function findLima(t){
+  var u=G0+"/drives/"+HW.CFG.driveId+"/root/search(q='"+encodeURIComponent(CFG.limaNombre)+"')?$select=id,name,size,file,lastModifiedDateTime,parentReference&$top=50";
+  return gf(u,t).then(function(r){return r.json();}).then(function(j){
+    var f=(j.value||[]).filter(function(i){ return i.file && /\.xls[xm]$/i.test(i.name) && i.name.indexOf("~$")!==0 && /STOCK\s*ODOO/i.test(i.name); })
+      .sort(function(a,b){ return a.lastModifiedDateTime<b.lastModifiedDateTime?1:-1; })[0];
+    if(!f) throw new Error("No encontré «"+CFG.limaNombre+"» en el SharePoint (404).");
+    return f; });
+}
+function loadLima(t){
+  var key="inv-lima:"+CFG.schema;
+  return findLima(t).then(function(item){
+    var v=FAST.ver(item);
+    return FAST.get(key).then(function(c){
+      if(c&&c.v===v) return {rows:c.rows,item:item,cache:true,savedAt:c.savedAt};
+      return gf(G0+"/drives/"+HW.CFG.driveId+"/items/"+item.id+"/content",t).then(function(r){return r.arrayBuffer();}).then(function(b){
+        var rows=parseLima(b), now=Date.now();
+        FAST.set(key,{v:v,rows:rows,item:{name:item.name,lastModifiedDateTime:item.lastModifiedDateTime},savedAt:now});
+        return {rows:rows,item:item,cache:false,savedAt:now};
+      });
+    });
+  });
+}
+function onLima(rows,label){ S.lima=rows; setSt("stLima","✓ "+rows.length+" registros · "+label,"ok");
+  S.fl={alm:"",est:"",cat:"",q:""}; $("vLima").innerHTML=""; renderLima(); }
+function loadLimaLive(silent){
+  setSt("stLima","Conectando con SharePoint…");
+  HW.auth.token(!silent).then(loadLima).then(function(r){
+    onLima(r.rows,r.item.name+" · modificado "+(r.item.lastModifiedDateTime||"").slice(0,16).replace("T"," ")+(r.cache?" · desde caché":""));
+    $("msConnect").hidden=true; $("limaRefresh").hidden=false;
+  }).catch(function(e){
+    if(silent&&/silent-failed|no-account/.test(e.message)){ tryLocalLima(); return; }
+    var m=HW.errorMsg(e);
+    if(/404/.test(m)||/Graph HTTP 40[13]/.test(e.message)){ tryLocalLima(m); return; }
+    setSt("stLima",m,"err"); });
+}
+function tryLocalLima(why){
+  fetch(CFG.limaLocal).then(function(r){ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(function(b){ onLima(parseLima(b),CFG.limaLocal+" (copia local)"); })
+    .catch(function(){ setSt("stLima",(why||"Conecta con SharePoint para leer «Stock Odoo»")+" — o usa «Cargar Excel».", why?"err":""); });
+}
+
+/* ═══ Provincia: Google Sheet ═══ */
+function parseProv(wb){
+  var nm=wb.SheetNames.indexOf(CFG.sheetHoja)>=0?CFG.sheetHoja:wb.SheetNames[0], ws=wb.Sheets[nm];
+  var a=XLSX.utils.sheet_to_json(ws,{header:1,defval:"",raw:true});
+  var h=0; for(var i=0;i<Math.min(a.length,10);i++){ if(a[i].some(function(c){ return norm(c)==="ACTIVO"; })){ h=i; break; } }
+  var hd=a[h], c={ ciu:colOf(hd,["CIUDAD"]), zon:colOf(hd,["ZONA"]), cat:colOf(hd,["CATEGORIA"]), act:colOf(hd,["ACTIVO"]), b:colOf(hd,["BUEN"]), m:colOf(hd,["MAL"]), t:colOf(hd,["TOTAL"]),
+    obs:colOf(hd,["OBSERV"]), fec:colOf(hd,["ULTIMA ACT"]), por:colOf(hd,["ACTUALIZADO POR"]), fue:colOf(hd,["FUENTE"]) };
+  if(c.ciu<0||c.act<0||c.b<0||c.m<0) throw new Error("No reconozco las columnas de la hoja (Ciudad, Activo, Buen estado, Mal estado).");
+  var rows=[];
+  for(var r=h+1;r<a.length;r++){ var x=a[r]; if(!x[c.act]||!x[c.ciu]) continue;
+    var b=num(x[c.b]), m=num(x[c.m]);
+    rows.push({ ciu:String(x[c.ciu]).trim(), zon:String(x[c.zon]||"").trim(), cat:String(x[c.cat]||"Sin categoría").trim(), act:String(x[c.act]).trim(), b:b, m:m, t:c.t>=0&&x[c.t]!==""?num(x[c.t]):b+m,
+      obs:String(x[c.obs]||"").trim(), fec:String(x[c.fec]||"").trim(), por:String(x[c.por]||"").trim(), fue:String(x[c.fue]||"").trim() }); }
+  return rows;
+}
+function onProv(rows,label){ S.prov=rows; setSt("stProv","✓ "+rows.length+" filas · "+label,"ok");
+  S.fp={ciu:"",cat:"",est:"",q:""}; $("vProv").innerHTML=""; renderProv(); }
+function loadProvLive(){
+  setSt("stProv","Leyendo Google Sheet…");
+  var u="https://docs.google.com/spreadsheets/d/"+CFG.sheetId+"/gviz/tq?tqx=out:csv&gid="+CFG.sheetGid;
+  fetch(u).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.text(); }).then(function(txt){
+    if(/^\s*</.test(txt)) throw new Error("login");
+    var rows=parseProv(XLSX.read(txt,{type:"string",raw:true})); if(!rows.length) throw new Error("vacío");
+    FAST.set("inv-prov:"+CFG.schema,{rows:rows,savedAt:Date.now()});
+    onProv(rows,"en vivo");
+  }).catch(function(e){
+    FAST.get("inv-prov:"+CFG.schema).then(function(c){
+      if(c&&c.rows){ onProv(c.rows,"última lectura guardada ("+FAST.ago(c.savedAt)+")"); setSt("stProv","⚠ No pude leer el Google Sheet ahora; muestro lo último guardado ("+FAST.ago(c.savedAt)+"). ¿Está compartido como «cualquier persona con el enlace»? O usa «Cargar Excel/CSV».","err"); }
+      else setSt("stProv","No pude leer el Google Sheet (está privado o sin conexión). Compártelo como «cualquier persona con el enlace – lector», o descárgalo (Archivo → Descargar → Excel/CSV) y usa «Cargar Excel/CSV».","err");
+    }); });
+}
+
+/* ═══ Vistas ═══ */
+function sum(rows,k){ return rows.reduce(function(s,r){ return s+r[k]; },0); }
+function group(rows,keyf,init,add){ var m={}; rows.forEach(function(r){ var k=keyf(r); if(!m[k]) m[k]=init(k); add(m[k],r); }); return Object.keys(m).map(function(k){return m[k];}); }
+
+function renderLima(){
+  var el=$("vLima");
+  if(!S.lima){ el.innerHTML='<div class="empty">Conecta con SharePoint o carga el Excel «Stock Odoo» para ver el inventario de Lima.</div>'; postH(); return; }
+  if(!$("fAlm")){ el.innerHTML='<div class="filters"><div><label>Almacén</label><select id="fAlm"></select></div><div><label>Estado</label><select id="fEst"></select></div><div><label>Categoría</label><select id="fCat"></select></div><div><label>Buscar producto</label><input type="text" id="fQ" placeholder="Nombre, referencia o comentario…"></div></div><div id="limaBody"></div>';
+    opts($("fAlm"),uniq(S.lima,"alm"),"Todos"); opts($("fEst"),uniq(S.lima,"est"),"Todos"); opts($("fCat"),uniq(S.lima,"cat"),"Todas");
+    ["fAlm","fEst","fCat"].forEach(function(id){ $(id).onchange=function(){ S.fl[{fAlm:"alm",fEst:"est",fCat:"cat"}[id]]=this.value; renderLima(); }; });
+    $("fQ").oninput=function(){ S.fl.q=this.value; renderLima(); }; }
+  var f=S.fl, q=norm(f.q);
+  var rows=S.lima.filter(function(r){ return (!f.alm||r.alm===f.alm)&&(!f.est||r.est===f.est)&&(!f.cat||r.cat===f.cat)&&(!q||norm(r.prod+" "+r.ref+" "+r.msg).indexOf(q)>=0); });
+  var buen=sum(rows.filter(function(r){return r.est==="Buen estado";}),"qty"), mal=sum(rows.filter(function(r){return r.est==="Mal estado";}),"qty"), tot=buen+mal;
+  var prods={}; rows.forEach(function(r){ prods[r.prod]=1; });
+  var h='<div class="kpis"><div class="kpi"><b>'+fmt(tot)+'</b><span>Unidades en inventario</span></div><div class="kpi"><b class="good">'+fmt(buen)+'</b><span>Buen estado</span></div><div class="kpi"><b class="bad">'+fmt(mal)+'</b><span>Mal estado</span></div><div class="kpi"><b>'+(tot?Math.round(mal/tot*100):0)+'%</b><span>% en mal estado</span></div><div class="kpi"><b>'+Object.keys(prods).length+'</b><span>Productos distintos</span></div><div class="kpi"><b>'+fmt(sum(rows,"pal"))+'</b><span>Pallets (suma de filas)</span></div></div>';
+  // por almacén
+  var alm=group(rows,function(r){return r.alm;},function(k){return {k:k,b:0,m:0,n:0};},function(o,r){ if(r.est==="Mal estado") o.m+=r.qty; else o.b+=r.qty; o.n++; }).sort(function(a,b){return (b.b+b.m)-(a.b+a.m);});
+  var cat=group(rows,function(r){return r.cat;},function(k){return {k:k,b:0,m:0,n:0};},function(o,r){ if(r.est==="Mal estado") o.m+=r.qty; else o.b+=r.qty; o.n++; }).sort(function(a,b){return (b.b+b.m)-(a.b+a.m);});
+  function tbl(arr,lab){ return '<table><thead><tr><th>'+lab+'</th><th class="n">Buen</th><th class="n">Mal</th><th class="n">Total</th><th>% mal</th></tr></thead><tbody>'+arr.map(function(o){ var t=o.b+o.m,p=t?o.m/t*100:0; return '<tr><td>'+esc(o.k)+'</td><td class="n good">'+fmt(o.b)+'</td><td class="n bad">'+fmt(o.m)+'</td><td class="n"><b>'+fmt(t)+'</b></td><td><div class="bar" title="'+Math.round(p)+'%"><i style="width:'+p+'%"></i></div></td></tr>'; }).join("")+'</tbody></table>'; }
+  h+='<div class="two"><div class="card"><h3>Por almacén</h3>'+tbl(alm,"Almacén")+'</div><div class="card"><h3>Por categoría</h3><div class="scroll" style="max-height:300px">'+tbl(cat,"Categoría")+'</div></div></div>';
+  // por producto
+  var pr=group(rows,function(r){return r.prod;},function(k){return {k:k,cat:"",cb:0,cm:0,hb:0,hm:0,foto:"",msg:""};},function(o,r){
+    var ch=r.alm.toUpperCase().indexOf("CHORR")>=0, mal=r.est==="Mal estado"; o.cat=r.cat; if(ch){ if(mal) o.hm+=r.qty; else o.hb+=r.qty; } else { if(mal) o.cm+=r.qty; else o.cb+=r.qty; }
+    if(!o.foto&&r.foto) o.foto=r.foto; if(r.msg&&o.msg.indexOf(r.msg)<0) o.msg+=(o.msg?" · ":"")+r.msg; }).sort(function(a,b){ return (b.cb+b.cm+b.hb+b.hm)-(a.cb+a.cm+a.hb+a.hm); });
+  h+='<div class="card"><h3>Detalle por producto ('+pr.length+')</h3><div class="scroll"><table><thead><tr><th>Producto</th><th>Categoría</th><th class="n">Chilca buen</th><th class="n">Chilca mal</th><th class="n">Chorrillos buen</th><th class="n">Chorrillos mal</th><th class="n">Total</th><th>Foto</th><th>Comentario</th></tr></thead><tbody>'
+    +(pr.length?pr.map(function(o){ var t=o.cb+o.cm+o.hb+o.hm; return '<tr><td>'+esc(o.k)+'</td><td>'+esc(o.cat)+'</td><td class="n">'+fmt(o.cb)+'</td><td class="n bad">'+(o.cm?fmt(o.cm):"")+'</td><td class="n">'+fmt(o.hb)+'</td><td class="n bad">'+(o.hm?fmt(o.hm):"")+'</td><td class="n"><b>'+fmt(t)+'</b></td><td>'+(/^https?:/.test(o.foto)?'<a href="'+esc(o.foto)+'" target="_blank" rel="noopener">ver</a>':"")+'</td><td class="obs">'+esc(o.msg)+'</td></tr>'; }).join(""):'<tr><td colspan="9" class="empty">Sin resultados con esos filtros.</td></tr>')
+    +'</tbody></table></div><p class="hint">Fuente: Stock Odoo (Lima). Las cantidades suman las filas de cada ubicación (Chilca / Chorrillos × buen / mal estado).</p></div>';
+  $("limaBody").innerHTML=h; postH();
+}
+
+function renderProv(){
+  var el=$("vProv");
+  if(!S.prov){ el.innerHTML='<div class="empty">Lee el Google Sheet o carga el archivo para ver el inventario de provincia.</div>'; postH(); return; }
+  if(!$("pCiu")){ el.innerHTML='<div class="filters"><div><label>Ciudad</label><select id="pCiu"></select></div><div><label>Categoría</label><select id="pCat"></select></div><div><label>Estado</label><select id="pEst"><option value="">Todos</option><option value="mal">Con mal estado</option><option value="stock">Con stock</option></select></div><div><label>Buscar activo</label><input type="text" id="pQ" placeholder="Activo u observación…"></div></div><div id="provBody"></div>';
+    opts($("pCiu"),uniq(S.prov,"ciu"),"Todas"); opts($("pCat"),uniq(S.prov,"cat"),"Todas");
+    $("pCiu").onchange=function(){ S.fp.ciu=this.value; renderProv(); }; $("pCat").onchange=function(){ S.fp.cat=this.value; renderProv(); };
+    $("pEst").onchange=function(){ S.fp.est=this.value; renderProv(); }; $("pQ").oninput=function(){ S.fp.q=this.value; renderProv(); }; }
+  var f=S.fp, q=norm(f.q);
+  var rows=S.prov.filter(function(r){ return (!f.ciu||r.ciu===f.ciu)&&(!f.cat||r.cat===f.cat)&&(f.est!=="mal"||r.m>0)&&(f.est!=="stock"||r.t>0)&&(!q||norm(r.act+" "+r.obs).indexOf(q)>=0); });
+  var b=sum(rows,"b"), m=sum(rows,"m"), t=b+m;
+  var fechas=uniq(S.prov,"fec"), ult=fechas.length?fechas[fechas.length-1]:"";
+  var h='<div class="kpis"><div class="kpi"><b>'+fmt(t)+'</b><span>Activos en total</span></div><div class="kpi"><b class="good">'+fmt(b)+'</b><span>Buen estado</span></div><div class="kpi"><b class="bad">'+fmt(m)+'</b><span>Mal estado</span></div><div class="kpi"><b>'+(t?Math.round(m/t*100):0)+'%</b><span>% en mal estado</span></div><div class="kpi"><b>'+uniq(rows,"ciu").length+'</b><span>Ciudades</span></div><div class="kpi"><b style="font-size:17px">'+esc(ult||"—")+'</b><span>Última actualización</span></div></div>';
+  var cats=uniq(rows,"cat");
+  var ciu=group(rows,function(r){return r.ciu;},function(k){ var o={k:k,b:0,m:0,c:{}}; return o; },function(o,r){ o.b+=r.b; o.m+=r.m; o.c[r.cat]=(o.c[r.cat]||0)+r.t; }).sort(function(a,b){return (b.b+b.m)-(a.b+a.m);});
+  h+='<div class="card"><h3>Por ciudad y categoría</h3><div class="scroll" style="max-height:340px"><table><thead><tr><th>Ciudad</th>'+cats.map(function(c){return '<th class="n">'+esc(c)+'</th>';}).join("")+'<th class="n">Buen</th><th class="n">Mal</th><th class="n">Total</th><th>% mal</th></tr></thead><tbody>'
+    +ciu.map(function(o){ var tt=o.b+o.m,p=tt?o.m/tt*100:0; return '<tr><td><b>'+esc(o.k)+'</b></td>'+cats.map(function(c){return '<td class="n">'+(o.c[c]?fmt(o.c[c]):"")+'</td>';}).join("")+'<td class="n good">'+fmt(o.b)+'</td><td class="n bad">'+fmt(o.m)+'</td><td class="n"><b>'+fmt(tt)+'</b></td><td><div class="bar" title="'+Math.round(p)+'%"><i style="width:'+p+'%"></i></div></td></tr>'; }).join("")+'</tbody></table></div></div>';
+  var det=rows.filter(function(r){return r.t>0||f.q||f.est===""&&false;}).sort(function(a,b){ return a.ciu<b.ciu?-1:a.ciu>b.ciu?1:(b.t-a.t); });
+  h+='<div class="card"><h3>Detalle por activo ('+det.length+')</h3><div class="scroll"><table><thead><tr><th>Ciudad</th><th>Categoría</th><th>Activo</th><th class="n">Buen</th><th class="n">Mal</th><th class="n">Total</th><th>Observaciones</th><th>Actualizado</th></tr></thead><tbody>'
+    +(det.length?det.map(function(r){ return '<tr><td>'+esc(r.ciu)+'</td><td>'+esc(r.cat)+'</td><td>'+esc(r.act)+'</td><td class="n good">'+fmt(r.b)+'</td><td class="n bad">'+(r.m?fmt(r.m):"")+'</td><td class="n"><b>'+fmt(r.t)+'</b></td><td class="obs">'+esc(r.obs)+'</td><td>'+esc(r.fec)+(r.por?'<div class="obs">'+esc(r.por)+'</div>':"")+'</td></tr>'; }).join(""):'<tr><td colspan="8" class="empty">Sin resultados con esos filtros.</td></tr>')
+    +'</tbody></table></div><p class="hint">Solo se listan los activos con existencias (total &gt; 0); los que están en 0 cuentan en los resúmenes pero no se listan.</p></div>';
+  $("provBody").innerHTML=h; postH();
+}
+
+/* ═══ Eventos ═══ */
+function showTab(t){ S.tab=t; document.querySelectorAll(".tab").forEach(function(e){ e.classList.toggle("on",e.dataset.t===t); }); $("vLima").hidden=t!=="lima"; $("vProv").hidden=t!=="prov"; setTimeout(postH,30); }
+document.querySelectorAll(".tab").forEach(function(e){ e.onclick=function(){ showTab(e.dataset.t); }; });
+$("msConnect").onclick=function(){ loadLimaLive(false); }; $("limaRefresh").onclick=function(){ loadLimaLive(false); };
+$("provRefresh").onclick=loadProvLive;
+$("fileLima").onchange=function(e){ var f=e.target.files[0]; if(!f) return; setSt("stLima","Leyendo "+f.name+"…");
+  f.arrayBuffer().then(function(b){ onLima(parseLima(b),f.name+" (manual)"); }).catch(function(x){ setSt("stLima",x.message,"err"); }); };
+$("fileProv").onchange=function(e){ var f=e.target.files[0]; if(!f) return; setSt("stProv","Leyendo "+f.name+"…");
+  var isCsv=/\.csv$/i.test(f.name);
+  (isCsv?f.text():f.arrayBuffer()).then(function(d){ onProv(parseProv(XLSX.read(d,{type:isCsv?"string":"array",raw:true})),f.name+" (manual)"); }).catch(function(x){ setSt("stProv",x.message,"err"); }); };
+window.addEventListener("resize",postH);
+
+renderLima(); renderProv();
+/* Al abrir: lo último guardado de cada fuente al instante, y se revisa si hay algo nuevo. */
+FAST.get("inv-lima:"+CFG.schema).then(function(c){ if(c&&c.rows&&!S.lima) onLima(c.rows,"guardado "+FAST.ago(c.savedAt)+" · revisando…"); });
+HW.auth.init(function(u){ $("msUser").textContent=u; }).then(function(has){
+  if(typeof msal==="undefined") $("msConnect").hidden=true;
+  if(has) loadLimaLive(true); else tryLocalLima();
+});
+loadProvLive();
+</script>
+</body>
+</html>
