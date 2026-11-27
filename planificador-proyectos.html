@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planificador de proyectos · BAT 360 Merch</title>
+<style>
+  :root{ --bg:#ffffff; --txt:#1b2a47; --muted:#6c7a92; --line:#dde4ee; --brand:#1d3b78; --soft:#f2f5fa;
+         --good:#1f9d57; --bad:#d6453d; --warn:#e0a100; --pend:#b8c2d6; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#1F2224; --txt:#EDEBE5; --muted:#9C9A92; --line:#33363A; --brand:#7FB4D4; --soft:#26292B; --good:#4cc283; --bad:#ef7a73; --warn:#f0c040; --pend:#5a6272; } }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px 20px 28px;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:13.5px;line-height:1.45}
+  h3{font-size:14px;margin:0 0 8px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{background:var(--soft);border:1px solid var(--line);color:var(--txt);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600}
+  .btn:hover{background:var(--line)} .btn.primary,.btn.on{background:var(--brand);color:#fff;border-color:var(--brand)} .btn[hidden]{display:none}
+  .status{font-size:12.5px;color:var(--muted)} .status.ok{color:var(--good)} .status.err{color:var(--bad)}
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0;padding:12px;background:var(--soft);border:1px solid var(--line);border-radius:12px}
+  .filters label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px}
+  select,input[type=text]{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--txt);font-size:13px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:10px;margin:0 0 16px}
+  .kpi{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .kpi b{display:block;font-size:24px;line-height:1.15} .kpi span{font-size:11.5px;color:var(--muted)}
+  .kpi.good b{color:var(--good)} .kpi.bad b{color:var(--bad)}
+  .card{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+  .chk{display:flex;align-items:center;gap:6px;font-size:12.5px;margin-top:20px} .chk input{width:auto}
+  .nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 12px}
+  .nav h2{font-size:16px;margin:0 8px;min-width:210px;text-align:center}
+  .cal{display:grid;grid-template-columns:repeat(7,minmax(118px,1fr));gap:6px;overflow-x:auto}
+  .dh{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);text-align:center;padding:2px 0}
+  .cell{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:6px 7px;min-height:84px;cursor:pointer;text-align:left;color:var(--txt);font:inherit;font-size:12px;display:block;width:100%}
+  .cell:hover{border-color:var(--muted)} .cell.sel{border:2px solid var(--brand)} .cell.today{box-shadow:inset 0 0 0 2px var(--warn)}
+  .cell.out{opacity:.38} .cell.empty{cursor:default}
+  .cell .dn{display:flex;justify-content:space-between;font-weight:700;font-size:12px;margin-bottom:3px}
+  .cell .dn em{font-style:normal;color:var(--muted);font-weight:600}
+  .cell.wk{min-height:150px}
+  .pl{display:flex;align-items:center;gap:5px;margin:2px 0;font-size:11.5px;line-height:1.25}
+  .pl i{width:8px;height:8px;border-radius:50%;flex:none} .pl span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1} .pl b{flex:none}
+  .pl b.late{color:var(--bad)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);white-space:nowrap}
+  td.n,th.n{text-align:right;white-space:nowrap} tr.click{cursor:pointer} tr.click:hover{background:var(--line)}
+  td.z{color:var(--pend)}
+  .chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .chip.efectivo{background:rgba(31,157,87,.15);color:var(--good)} .chip.noefectivo{background:rgba(214,69,61,.15);color:var(--bad)} .chip.visitado{background:rgba(29,59,120,.14);color:var(--brand)} .chip.pendiente{background:rgba(120,130,150,.18);color:var(--muted)} .chip.vencida{background:rgba(224,161,0,.2);color:var(--warn)}
+  .hint{font-size:11.5px;color:var(--muted);margin:6px 0 0}
+  a{color:var(--brand)}
+</style>
+</head>
+<body>
+
+<div class="row">
+  <button class="btn primary" id="msConnect">🔐 Conectar con SharePoint (en vivo)</button>
+  <button class="btn" id="msRefresh" hidden>🔄 Actualizar</button>
+  <label class="btn" style="margin:0">📂 Cargar Excel manual<input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" multiple hidden></label>
+  <span class="status" id="status">Sin datos todavía. Conecta con SharePoint para leer las programaciones de los proyectos en curso.</span>
+  <span class="status" id="msUser"></span>
+</div>
+
+<div id="app" hidden>
+  <div class="filters">
+    <div><label>Proyecto</label><select id="fProyecto"></select></div>
+    <div><label>Cadena</label><select id="fCadena"></select></div>
+    <div><label>Ubigeo</label><select id="fZona"></select></div>
+    <div><label>Merch</label><select id="fMerch"></select></div>
+    <div><label>Buscar</label><input type="text" id="search" placeholder="Tienda, código TT, OT, distrito…"></div>
+    <label class="chk"><input type="checkbox" id="fOng" checked> Solo proyectos en curso</label>
+  </div>
+
+  <div class="nav">
+    <button class="btn on" id="mSem">Semana</button><button class="btn" id="mMes">Mes</button>
+    <button class="btn" id="prev">◀</button><h2 id="ttl"></h2><button class="btn" id="next">▶</button>
+    <button class="btn" id="hoy">Hoy</button>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>Programación <span class="status" id="calHint"></span></h3>
+    <div class="cal" id="cal"></div>
+    <p class="hint">Toca un día para ver sus tiendas. Cada color es un proyecto; en rojo, lo programado que ya pasó y sigue pendiente (vencido). El día de hoy va con borde amarillo.</p>
+  </div>
+
+  <div class="card">
+    <h3>Programado por proyecto <span class="status" id="matHint"></span></h3>
+    <div style="overflow-x:auto"><table id="mat"></table></div>
+  </div>
+
+  <div class="card">
+    <h3 id="detTtl">Detalle</h3>
+    <div style="overflow-x:auto"><table id="det"></table></div>
+    <p class="hint" id="detHint"></p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
+<script src="fast.js"></script>
+<script>
+/* ═══ Config: carpeta PROYECTOS ACTUALES (OneDrive de acastro) leída en vivo vía Microsoft Graph ═══
+   Cada subcarpeta = una campaña. Se lee cada Excel tal como lo actualiza el equipo (sin depender del consolidado). */
+window.CONS = {
+  clientId: "2dd44541-d3ac-459c-afa0-aa873590f7e0",
+  tenant:   "9d85a34e-57e5-4f82-9341-7dd9300077b7",
+  scopes:   ["Files.Read.All"],
+  driveId:  "b!ftpx1PHMU02Xyd_BvRi5gZ4jKtzFMjZHt1vZTICVWd0sPgcGYMRfTZopqpx_5vTB",
+  folderId: "015HP6ULJU6VJEWWCN4NDJJQZOAVGLAOL3",   // MASSIEL/BAT/BORRADOR/PLAN/PROYECTOS ACTUALES
+  year:     2026,   // año de las fechas escritas sin año ("19-feb"); si la foto trae fecha (…_20240401_…) se usa esa
+  /* HW y Proyecto Interno tienen sus propias vistas: se excluyen. Se compara contra el nombre de la carpeta (sin tildes, mayúsculas). */
+  excluir:  [/\bHW\d*\b/, /HARDWARE/, /INTERNO/],
+  schema:   "proy3",   // súbelo si cambia lo que devuelve parseSheet/parseWorkbook: invalida la caché local
+  maxMB:    8,      // Excel más grandes (padrones/maestros) se omiten
+  pageSize: 48
+};
+
+(function(){
+"use strict";
+var CFG = window.CONS, $ = function(id){ return document.getElementById(id); };
+var MESES = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,set:8,sep:8,oct:9,nov:10,dic:11};
+var MESN = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Set","Oct","Nov","Dic"];
+var YEAR_DEF = +CFG.year || new Date().getFullYear();
+var ALL = [], VIEW = [], PHOTOS = [], SOURCES = [], shown = 0, selProj = "";
+
+function norm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim().toUpperCase(); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+function pad(n){ return (n<10?"0":"")+n; }
+function safeUrl(u){ u=String(u==null?"":u).trim(); return /^https?:\/\//i.test(u) ? u : ""; }
+function isImg(u){ return /\.(jpe?g|png|webp|gif)(\?|#|$)/i.test(u) || /^https:\/\/storage\.googleapis\.com\/ttaudit_medias\//i.test(u); }
+function excluido(name){ var n=norm(name); return CFG.excluir.some(function(re){ return re.test(n); }); }
+
+function parseDate(v){
+  if(v==null || v==="") return null;
+  if(v instanceof Date && !isNaN(v)) return {y:v.getFullYear(), m:v.getMonth(), d:v.getDate()};
+  if(typeof v==="number" && v>20000 && v<80000){ var d=new Date(Math.round((v-25569)*86400000)); return {y:d.getUTCFullYear(),m:d.getUTCMonth(),d:d.getUTCDate()}; }
+  var s = norm(v).toLowerCase(), m;
+  if((m = s.match(/^(\d{1,2})[-\/ ]([a-z]{3})[a-z]*(?:[-\/ ](\d{2,4}))?$/)) && MESES[m[2]]!=null){
+    var y = m[3] ? (+m[3]<100 ? 2000+ +m[3] : +m[3]) : YEAR_DEF; return {y:y,m:MESES[m[2]],d:+m[1],ny:!m[3]};
+  }
+  if((m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})$/))){ var yy=+m[3]<100?2000+ +m[3]:+m[3]; return {y:yy,m:+m[2]-1,d:+m[1]}; }
+  return null;
+}
+var dkey = function(d){ return d ? d.y+"-"+pad(d.m+1) : ""; };
+var dstr = function(d){ return d ? pad(d.d)+"/"+pad(d.m+1)+"/"+d.y : ""; };
+var dnum = function(d){ return d ? d.y*400+d.m*32+d.d : 0; };
+/* Las fotos de ttaudit traen la fecha en el nombre (…_20240401_134847.jpg): sirve cuando la hoja escribe "01-abr" sin año. */
+function linkDate(u){ var m=String(u).match(/_(20\d\d)(\d\d)(\d\d)_/); return m && +m[2]>=1 && +m[2]<=12 ? {y:+m[1],m:+m[2]-1,d:+m[3]} : null; }
+
+/* efectivo / no efectivo / visitado (se fue, pero la hoja no dice si fue efectivo) / pendiente */
+function estado(efect, status){
+  var t = norm(efect)+"|"+norm(status);
+  if(/NO EFECT|NO REALIZ|NO SE PUDO|RECHAZ/.test(t)) return "noefectivo";
+  if(/EFECT|REALIZADO|INSTALADO|COMPLET|CONFORME/.test(t)) return "efectivo";
+  if(/VISIT/.test(t) && !/POR VISIT|NO VISIT/.test(t)) return "visitado";
+  return "pendiente";
+}
+var ejec = function(c){ return c.t - c.pendiente; };
+
+/* ═══ Lectura genérica de cualquier Excel de proyecto: detecta el encabezado y las columnas por nombre ═══ */
+var COLS = {
+  tienda:["TIENDA","TIENDAS","POS","NOMBRE DEL PDV","NOMBRE PDV","PDV","NOMBRE DE LA TIENDA"],
+  codigo:["CODIGO TT","CODIGO TT AUDIT","COD TT AUDIT","ID STORE","CODIGO"],
+  status:["STATUS","ESTADO"], efect:["EFECTIVIDAD","RESULTADO"],
+  cadena:["CADENA"], distrito:["DISTRITO"], ciudad:["CIUDAD"], merch:["MERCH","ENCARGADO","MERCHANDISER"],
+  obs:["OBSERVACIONES","OBSERVACION","COMENTARIO","DETALLE COMENTARIOS NO EFECTIVOS","MOTIVO NO EFECTIVOS","OBSERVACIONES DETALLADAS"],
+  link:["LINK","LINK FOTO"], ot:["DETALLE DE OT","DETALLE DE OTS","TIPO DE OTS","OT"]
+};
+var DATE_PREF = ["EJECUCION","VISITADA","VISITA","PROGRAMADA","INSTALACION","REPORTADA"];
+function findCols(h){
+  var map={};
+  Object.keys(COLS).forEach(function(k){ for(var a=0;a<COLS[k].length;a++){ var ix=h.indexOf(COLS[k][a]); if(ix>=0){ map[k]=ix; break; } } });
+  for(var p=0;p<DATE_PREF.length && map.fecha==null;p++) for(var i=0;i<h.length;i++) if(h[i].indexOf("FECHA")===0 && h[i].indexOf(DATE_PREF[p])>=0){ map.fecha=i; break; }
+  if(map.fecha==null) for(var j=0;j<h.length;j++) if(h[j].indexOf("FECHA")===0){ map.fecha=j; break; }
+  /* Ubigeo: la columna con Lima / KC / NKC (se escribe «LIMA/KC/NKC», «LIMA /KC/NKC», «LIMA - KC - NKC» o «LIMA / PROV») */
+  for(var z=0;z<h.length;z++){ var hz=h[z].replace(/\s/g,""); if(hz==="LIMA/KC/NKC"||hz==="LIMA-KC-NKC"||hz==="LIMA/PROV"||hz==="LIMA/PROVINCIA"){ map.zona=z; break; } }
+  /* Foto: cualquier columna "LINK …" (p. ej. "LINK IMPLEMENTACION" en Plan Mass), menos la de comodatos */
+  if(map.link==null) for(var k=0;k<h.length;k++) if(h[k].indexOf("LINK")===0 && h[k].indexOf("COMODATO")<0){ map.link=k; break; }
+  return map;
+}
+/* Recorta hojas que declaran un rango enorme (p. ej. A1:XFD2158) al rango real con datos; si no, convertirlas tarda minutos. */
+function sheetRows(ws){
+  var ref=ws["!ref"]; if(!ref) return [];
+  var rg=XLSX.utils.decode_range(ref), maxR=0, maxC=0;
+  Object.keys(ws).forEach(function(k){ if(k.charAt(0)==="!") return; var c=XLSX.utils.decode_cell(k); if(c.r>maxR) maxR=c.r; if(c.c>maxC) maxC=c.c; });
+  rg.e.r=Math.min(rg.e.r,maxR); rg.e.c=Math.min(rg.e.c,maxC);
+  return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:false,range:rg});
+}
+function zonaVal(v){ var n=norm(v); return (n==="LIMA"||n==="KC"||n==="NKC") ? n : ""; }
+/* Filas sin ubigeo en su Excel: se deduce (1) por el código de la tienda en otros proyectos, (2) por su distrito, (3) por su ciudad, votando
+   con las filas que sí lo traen. Si no hay forma, «SIN DATO». Las deducidas quedan marcadas (zonaInf). */
+function inferZona(rows){
+  var byCode={}, byDist={}, byCity={};
+  var vote=function(m,k,z){ if(!k) return; var o=m[k]||(m[k]={}); o[z]=(o[z]||0)+1; };
+  rows.forEach(function(r){ if(!r.zona) return; vote(byCode,r.codigo,r.zona); vote(byDist,r.distrito!=="SIN DISTRITO"?r.distrito:"",r.zona); vote(byCity,r.ciudad,r.zona); });
+  var best=function(o){ var b="", n=0; if(!o) return ""; Object.keys(o).forEach(function(z){ if(o[z]>n){ n=o[z]; b=z; } }); return b; };
+  rows.forEach(function(r){
+    if(r.zona){ r.zonaInf=false; return; }
+    var z=best(byCode[r.codigo]) || (r.distrito!=="SIN DISTRITO" ? best(byDist[r.distrito]) : "") || best(byCity[r.ciudad]);
+    r.zona=z||"SIN DATO"; r.zonaInf=!!z;
+  });
+}
+function parseSheet(ws, proyecto){
+  var rows = sheetRows(ws), hi=-1, map=null;
+  for(var i=0;i<Math.min(rows.length,15);i++){
+    var m=findCols(rows[i].map(norm));
+    if(m.tienda!=null && (m.status!=null || m.efect!=null)){ hi=i; map=m; break; }
+  }
+  if(hi<0) return null;
+  var out=[];
+  for(var r=hi+1;r<rows.length;r++){
+    var row=rows[r], g=function(k){ return map[k]==null ? "" : row[map[k]]; };
+    var tienda=String(g("tienda")).trim(); if(!tienda) continue;
+    var link=safeUrl(g("link")), fp=parseDate(g("fecha")), ld=linkDate(link);
+    if(ld){ if(!fp) fp = ld; else if(fp.ny) fp = {y:ld.y, m:fp.m, d:fp.d}; }   // la hoja manda; de la foto solo se toma el año (o la fecha si la hoja no tiene)
+    var cadena=String(g("cadena")).trim(); if(!cadena){ var pm=tienda.match(/^([A-Za-zÁÉÍÓÚÑáéíóúñ ]{2,20}?)\s+[-–]\s+/); cadena=pm?norm(pm[1]):"SIN CADENA"; }
+    var o={ proyecto:proyecto, codigo:String(g("codigo")).trim(), tienda:tienda, cadena:cadena, res:estado(g("efect"),g("status")),
+      merch:String(g("merch")).trim(), obs:String(g("obs")).trim(), link:link, ot:String(g("ot")).trim(), fProg:fp, fRep:null, distrito:norm(g("distrito"))||"SIN DISTRITO", ciudad:norm(g("ciudad")), zona:zonaVal(g("zona")) };
+    o.search=norm([o.tienda,o.codigo,o.ot,o.merch,o.obs,o.distrito].join(" "));
+    out.push(o);
+  }
+  return out;
+}
+/* Un libro puede tener hojas auxiliares: se usa la hoja visible con más filas válidas. */
+function parseWorkbook(wb, proyecto, file){
+  var meta=(wb.Workbook&&wb.Workbook.Sheets)||[], best=null;
+  wb.SheetNames.forEach(function(n,i){
+    if(meta[i] && meta[i].Hidden) return;
+    if(!wb.Sheets[n]) return;
+    var r=parseSheet(wb.Sheets[n],proyecto);
+    if(r && (!best || r.length>best.rows.length)) best={rows:r,sheet:n};
+  });
+  if(!best || !best.rows.length) return {rows:[],src:{proyecto:proyecto,file:file,sheet:"",n:0,nota:"Sin columnas de tienda + status (o sin filas)"}};
+  return {rows:best.rows,src:{proyecto:proyecto,file:file,sheet:best.sheet,n:best.rows.length,nota:""}};
+}
+
+
+/* ═══ Planificador de proyectos: programaciones (fecha) de las campañas en curso, por semana y mes ═══
+   Usa la misma lectura y la misma caché que Proyectos (schema proy3): si ya abriste Proyectos, esto carga al instante. */
+var DIAS=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"], MESL=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Setiembre","Octubre","Noviembre","Diciembre"];
+var RESL={efectivo:"Efectivo",noefectivo:"No efectivo",visitado:"Visitado",pendiente:"Pendiente"};
+var ALL=[], SOURCES=[], MODE="sem", SELDAY="", ONG={}, COLOR={};
+var TODAY=new Date(); TODAY.setHours(0,0,0,0);
+var REF=new Date(TODAY);
+var k2=function(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); };
+var rk=function(r){ return r.fProg ? r.fProg.y+"-"+pad(r.fProg.m+1)+"-"+pad(r.fProg.d) : ""; };
+var addD=function(d,n){ var x=new Date(d); x.setDate(x.getDate()+n); return x; };
+var monOf=function(d){ return addD(d,-((d.getDay()+6)%7)); };
+var late=function(r){ return r.res==="pendiente" && r.fProg && rk(r)<k2(TODAY); };
+var fmtD=function(d){ return d.getDate()+" "+MESL[d.getMonth()].slice(0,3).toLowerCase(); };
+function pct(a,b){ return b ? Math.round(a*1000/b)/10+"%" : "–"; }
+
+function uniq(rows,k){ var s={}; rows.forEach(function(r){ if(r[k]) s[r[k]]=1; }); return Object.keys(s).sort(); }
+function fillSelect(id,vals,allLabel){ var el=$(id), cur=el.value; el.innerHTML='<option value="">'+allLabel+'</option>'+vals.map(function(v){return '<option>'+esc(v)+'</option>';}).join(""); if(cur&&vals.indexOf(cur)>=0) el.value=cur; }
+function colorOf(p){ if(!COLOR[p]){ var n=Object.keys(COLOR).length; COLOR[p]="hsl("+Math.round((n*137.5)%360)+",62%,52%)"; } return COLOR[p]; }
+
+/* «En curso»: la campaña tiene algo pendiente o programó algo en las últimas 2 semanas o más adelante */
+function calcOngoing(){
+  var lim=k2(addD(TODAY,-14)), o={};
+  ALL.forEach(function(r){ var on = r.res==="pendiente" || (r.fProg && rk(r)>=lim); if(on) o[r.proyecto]=1; });
+  ONG=o;
+}
+function buildFilters(){
+  calcOngoing();
+  var rows=$("fOng").checked ? ALL.filter(function(r){return ONG[r.proyecto];}) : ALL;
+  fillSelect("fProyecto",uniq(rows,"proyecto"),"Todos"); fillSelect("fCadena",uniq(rows,"cadena"),"Todas");
+  fillSelect("fMerch",uniq(rows,"merch"),"Todos");
+  fillSelect("fZona",["LIMA","KC","NKC","SIN DATO"].filter(function(z){ return rows.some(function(r){return r.zona===z;}); }),"Todos");
+}
+function pass(r){
+  var v=function(id){return $(id).value;}, q=norm($("search").value);
+  return (!$("fOng").checked||ONG[r.proyecto]) && (!v("fProyecto")||r.proyecto===v("fProyecto")) && (!v("fCadena")||r.cadena===v("fCadena")) &&
+    (!v("fZona")||r.zona===v("fZona")) && (!v("fMerch")||r.merch===v("fMerch")) && (!q||r.search.indexOf(q)>=0);
+}
+
+function period(){
+  if(MODE==="sem"){ var s=monOf(REF); return {a:s,b:addD(s,6),gs:s,ge:addD(s,6)}; }
+  var f=new Date(REF.getFullYear(),REF.getMonth(),1), l=new Date(REF.getFullYear(),REF.getMonth()+1,0);
+  return {a:f,b:l,gs:monOf(f),ge:addD(monOf(l),6)};
+}
+function chipsHtml(rows,max){
+  var g={}; rows.forEach(function(r){ var o=g[r.proyecto]||(g[r.proyecto]={n:0,l:0}); o.n++; if(late(r)) o.l++; });
+  var ks=Object.keys(g).sort(function(a,b){return g[b].n-g[a].n;}), h="";
+  ks.slice(0,max).forEach(function(p){ h+='<div class="pl" title="'+esc(p)+'"><i style="background:'+colorOf(p)+'"></i><span>'+esc(p)+'</span><b'+(g[p].l?' class="late"':"")+'>'+g[p].n+'</b></div>'; });
+  if(ks.length>max) h+='<div class="pl"><span class="status">+'+(ks.length-max)+' más</span></div>';
+  return h;
+}
+
+function render(){
+  var P=period(), ka=k2(P.a), kb=k2(P.b), F=ALL.filter(pass);
+  var byDay={}; F.forEach(function(r){ if(r.fProg){ var k=rk(r); (byDay[k]=byDay[k]||[]).push(r); } });
+  var inP=F.filter(function(r){ var k=rk(r); return r.fProg && k>=ka && k<=kb; });
+  var sinF=F.filter(function(r){ return !r.fProg && r.res==="pendiente"; });
+  var ej=inP.filter(function(r){return r.res!=="pendiente";}).length, pe=inP.length-ej, ve=inP.filter(late).length;
+  var projs={}; inP.forEach(function(r){projs[r.proyecto]=1;});
+  var wk=MODE==="sem";
+  $("ttl").textContent = wk ? fmtD(P.a)+" – "+fmtD(P.b)+" "+P.b.getFullYear() : MESL[REF.getMonth()]+" "+REF.getFullYear();
+  $("kpis").innerHTML=[["Programadas",inP.length,""],["Ejecutadas",ej,"good"],["Pendientes",pe,""],["Vencidas",ve,ve?"bad":""],
+    ["Avance",pct(ej,inP.length),""],["Proyectos con programación",Object.keys(projs).length,""],["Por programar (sin fecha)",sinF.length,""]]
+    .map(function(k){ return '<div class="kpi '+k[2]+'"><b>'+k[1]+'</b><span>'+k[0]+'</span></div>'; }).join("");
+
+  /* calendario */
+  var h=DIAS.map(function(d){return '<div class="dh">'+d+'</div>';}).join("");
+  for(var d=new Date(P.gs); d<=P.ge; d=addD(d,1)){
+    var k=k2(d), out=k<ka||k>kb, rs=out?[]:(byDay[k]||[]), cls="cell"+(wk?" wk":"")+(out?" out empty":"")+(k===k2(TODAY)?" today":"")+(k===SELDAY?" sel":"");
+    h+='<button class="'+cls+'" data-k="'+k+'"'+(out?" disabled":"")+'><div class="dn"><span>'+d.getDate()+'</span>'+(rs.length?'<em>'+rs.length+'</em>':"")+'</div>'+chipsHtml(rs,wk?8:3)+'</button>';
+  }
+  $("cal").innerHTML=h;
+  $("calHint").textContent="· "+inP.length.toLocaleString("es-PE")+" programaciones en el periodo";
+  Array.prototype.forEach.call($("cal").querySelectorAll(".cell"),function(c){ c.onclick=function(){ SELDAY = SELDAY===c.dataset.k ? "" : c.dataset.k; render(); }; });
+
+  /* matriz proyecto × día (semana) o × semana (mes) */
+  var cols=[];
+  if(wk) for(var i=0;i<7;i++){ var dd=addD(P.a,i); cols.push({a:k2(dd),b:k2(dd),l:DIAS[i]+" "+dd.getDate()}); }
+  else for(var s=new Date(P.gs); s<=P.ge; s=addD(s,7)){ var e=addD(s,6); cols.push({a:k2(s),b:k2(e),l:s.getDate()+"–"+e.getDate()}); }
+  var g={}; inP.forEach(function(r){ (g[r.proyecto]=g[r.proyecto]||[]).push(r); });
+  var pk=Object.keys(g).sort(function(a,b){return g[b].length-g[a].length;});
+  $("mat").innerHTML='<tr><th>Proyecto</th>'+cols.map(function(c){return '<th class="n">'+c.l+'</th>';}).join("")+'<th class="n">Total</th><th class="n">Ejecutadas</th><th class="n">Vencidas</th></tr>'+
+    (pk.map(function(p){ var rs=g[p], e2=rs.filter(function(r){return r.res!=="pendiente";}).length;
+      return '<tr class="click" data-p="'+esc(p)+'"><td><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+colorOf(p)+';margin-right:6px"></i><b>'+esc(p)+'</b></td>'+
+        cols.map(function(c){ var n=rs.filter(function(r){var k=rk(r);return k>=c.a&&k<=c.b;}).length; return n?'<td class="n">'+n+'</td>':'<td class="n z">·</td>'; }).join("")+
+        '<td class="n"><b>'+rs.length+'</b></td><td class="n">'+pct(e2,rs.length)+'</td><td class="n">'+(rs.filter(late).length||"")+'</td></tr>'; }).join("") || '<tr><td class="status">No hay programaciones en este periodo con estos filtros.</td></tr>');
+  $("matHint").textContent="· toca un proyecto para filtrarlo";
+  Array.prototype.forEach.call($("mat").querySelectorAll("tr.click"),function(tr){ tr.onclick=function(){ $("fProyecto").value=tr.dataset.p; render(); }; });
+
+  /* detalle del día elegido (o de todo el periodo, acotado) */
+  var det = SELDAY ? (byDay[SELDAY]||[]) : inP, cap=300;
+  det=det.slice().sort(function(a,b){ var x=rk(a), y=rk(b); return x>y?1:x<y?-1 : (a.proyecto>b.proyecto?1:-1); });
+  var sd=SELDAY?SELDAY.split("-"):null;
+  $("detTtl").textContent = SELDAY ? "Detalle del "+(+sd[2])+" de "+MESL[+sd[1]-1].toLowerCase()+" · "+det.length+" tiendas" : "Detalle del periodo · "+det.length+" tiendas";
+  $("det").innerHTML='<tr><th>Fecha</th><th>Proyecto</th><th>Tienda</th><th>Cadena</th><th>Ubigeo</th><th>Distrito</th><th>Merch</th><th>OT</th><th>Estado</th></tr>'+
+    (det.slice(0,cap).map(function(r){ var v=late(r);
+      return '<tr><td>'+esc(dstr(r.fProg))+'</td><td>'+esc(r.proyecto)+'</td><td>'+esc(r.tienda)+'</td><td>'+esc(r.cadena)+'</td><td>'+esc(r.zona)+'</td><td>'+esc(r.distrito)+'</td><td>'+esc(r.merch)+'</td><td>'+esc(r.ot)+'</td><td><span class="chip '+(v?"vencida":r.res)+'">'+(v?"Vencida":RESL[r.res])+'</span></td></tr>'; }).join("") || '<tr><td class="status">Sin tiendas.</td></tr>');
+  $("detHint").textContent = det.length>cap ? "Mostrando "+cap+" de "+det.length+". Toca un día o filtra por proyecto para acotar." : "";
+  postH();
+}
+
+["fProyecto","fCadena","fZona","fMerch"].forEach(function(id){ $(id).onchange=render; });
+$("fOng").onchange=function(){ buildFilters(); render(); };
+$("search").oninput=render;
+function setMode(m){ MODE=m; SELDAY=""; $("mSem").className="btn"+(m==="sem"?" on":""); $("mMes").className="btn"+(m==="mes"?" on":""); render(); }
+$("mSem").onclick=function(){ setMode("sem"); }; $("mMes").onclick=function(){ setMode("mes"); };
+function step(n){
+  SELDAY="";
+  if(MODE==="sem") REF=addD(REF,7*n); else REF=new Date(REF.getFullYear(),REF.getMonth()+n,1);
+  render();
+}
+$("prev").onclick=function(){ step(-1); }; $("next").onclick=function(){ step(1); };
+$("hoy").onclick=function(){ REF=new Date(TODAY); SELDAY=""; render(); };
+
+function onData(rows,sources,label){
+  inferZona(rows); ALL=rows; SOURCES=sources; $("app").hidden=false; buildFilters(); render();
+  var st=$("status"); st.className="status ok"; st.textContent="✓ "+rows.length.toLocaleString("es-PE")+" registros · "+label;
+}
+function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
+window.addEventListener("resize",postH);
+function setSt(t,cls){ var s=$("status"); s.textContent=t; s.className="status"+(cls?" "+cls:""); }
+function fail(err){ setSt("⚠ "+((err&&err.message)||err),"err"); }
+function readWb(buf){
+  var cheap=XLSX.read(buf,{type:"array",bookSheets:true}), meta=(cheap.Workbook&&cheap.Workbook.Sheets)||[];
+  var names=cheap.SheetNames.filter(function(n,i){ return !(meta[i]&&meta[i].Hidden); });
+  return XLSX.read(buf,FAST.lean({type:"array",cellDates:true,sheets:names}));
+}
+
+/* ═══ Carga manual (uno o varios Excel; la campaña = nombre del archivo) ═══ */
+$("fileInput").onchange=function(e){
+  var files=[].slice.call(e.target.files); if(!files.length) return; setSt("Leyendo "+files.length+" archivo(s)…");
+  Promise.all(files.map(function(f){ return f.arrayBuffer().then(function(b){ var n=f.name.replace(/\.[^.]+$/,""); return parseWorkbook(readWb(b),norm(n),f.name); }); }))
+  .then(function(rs){ onData([].concat.apply([],rs.map(function(r){return r.rows;})), rs.map(function(r){return r.src;}), "carga manual"); }).catch(fail);
+};
+
+/* ═══ Conexión en vivo: Microsoft Graph + MSAL ═══ */
+var msalApp=null, busy=false, G="https://graph.microsoft.com/v1.0/drives/"+CFG.driveId;
+function token(interactive){
+  var req={scopes:CFG.scopes}, acc=msalApp.getAllAccounts()[0];
+  if(acc){ req.account=acc; return msalApp.acquireTokenSilent(req).then(function(r){return r.accessToken;}).catch(function(){
+    if(!interactive) return Promise.reject(new Error("silent-failed")); return msalApp.acquireTokenPopup(req).then(function(r){return r.accessToken;}); }); }
+  if(!interactive) return Promise.reject(new Error("no-account"));
+  return msalApp.loginPopup(req).then(function(r){ $("msUser").textContent=r.account.username; return r.accessToken; });
+}
+function gfetch(url,t){ return fetch(url,{headers:{Authorization:"Bearer "+t}}).then(function(r){ if(!r.ok) throw new Error("Graph HTTP "+r.status); return r; }); }
+function kids(id,t){ return gfetch(G+"/items/"+id+"/children?$select=id,name,size,folder,file,lastModifiedDateTime&$top=200",t).then(function(r){return r.json();}).then(function(j){return j.value||[];}); }
+var isXlsx=function(it){ return it.file && /\.xls[xm]$/i.test(it.name) && it.name.indexOf("~$")!==0; };
+
+function loadLive(silent){
+  if(busy) return; busy=true; if(!silent) setSt("Conectando con SharePoint y buscando las carpetas de proyectos…");
+  var t, jobs=[], sources=[];
+  token(!silent).then(function(tk){ t=tk; return kids(CFG.folderId,t); })
+  .then(function(folders){
+    folders=folders.filter(function(f){ return f.folder; });
+    var short=function(n){ return norm(n).replace(/^PROYECTO\s+/,""); };
+    return Promise.all(folders.map(function(f){
+      if(excluido(f.name)){ sources.push({proyecto:short(f.name),file:"(carpeta)",sheet:"",n:0,nota:"",excluida:true}); return null; }
+      return kids(f.id,t).then(function(items){
+        var subs=items.filter(function(i){return i.folder;});
+        return Promise.all(subs.map(function(s){ return kids(s.id,t); })).then(function(more){
+          items.concat([].concat.apply([],more)).forEach(function(i){
+            if(!isXlsx(i)) return;
+            if(i.size>CFG.maxMB*1048576){ sources.push({proyecto:short(f.name),file:i.name,sheet:"",n:0,nota:"Omitido: pesa "+(i.size/1048576).toFixed(1)+" MB (padrón/maestro)"}); return; }
+            jobs.push({id:i.id,name:i.name,proyecto:short(f.name),v:FAST.ver(i)});
+          });
+        });
+      });
+    }));
+  }).then(function(){
+    var rows=[], done=0, cached=0, q=jobs.slice();
+    function worker(){
+      var j=q.shift(); if(!j) return Promise.resolve();
+      var ckey="proy:"+CFG.schema+":"+j.id;
+      return FAST.get(ckey).then(function(c){
+        if(c && c.v===j.v){ rows=rows.concat(c.rows); sources.push(c.src); cached++; return; }      // sin cambios: no se descarga
+        return gfetch(G+"/items/"+j.id+"/content",t).then(function(r){return r.arrayBuffer();}).then(function(b){
+          var r=parseWorkbook(readWb(b),j.proyecto,j.name); rows=rows.concat(r.rows); sources.push(r.src); FAST.set(ckey,{v:j.v,rows:r.rows,src:r.src});
+        });
+      }).catch(function(e){ sources.push({proyecto:j.proyecto,file:j.name,sheet:"",n:0,nota:"Error al leer: "+((e&&e.message)||e)}); })
+      .then(function(){ done++; setSt("Leyendo Excel de proyectos… "+done+" de "+jobs.length); return worker(); });
+    }
+    return Promise.all([worker(),worker(),worker(),worker()]).then(function(){ return {rows:rows,sources:sources,cached:cached,total:jobs.length}; });
+  }).then(function(res){
+    res.sources.sort(function(a,b){ return a.proyecto>b.proyecto?1:a.proyecto<b.proyecto?-1:0; });
+    FAST.set("proy:last:"+CFG.schema,{rows:res.rows,sources:res.sources,savedAt:Date.now()});     // antes de onData: se guardan las filas sin el ubigeo deducido
+    onData(res.rows,res.sources,"SharePoint en vivo · "+new Date().toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"})+(res.cached?" · "+res.cached+" de "+res.total+" archivos sin cambios (no se descargaron de nuevo)":"")); $("msRefresh").hidden=false;
+  }).catch(function(err){
+    var m=(err&&err.message)||String(err);
+    if(silent && (m==="no-account"||m==="silent-failed")) return;
+    if(m.indexOf("403")>=0) setSt("⚠ Tu cuenta no tiene acceso a la carpeta (403). Pide a acastro que te comparta MASSIEL/BAT/BORRADOR/PLAN/PROYECTOS ACTUALES, o usa la carga manual.","err");
+    else if(m.indexOf("404")>=0) setSt("⚠ No se encontró la carpeta (404): la movieron o borraron. Usa la carga manual.","err");
+    else if(m.indexOf("interaction_in_progress")>=0) setSt("⚠ Hay un inicio de sesión en curso. Recarga (F5) y completa el login.","err");
+    else if(m.indexOf("popup")>=0) setSt("⚠ El navegador bloqueó la ventana de inicio de sesión: permite ventanas emergentes para este sitio.","err");
+    else fail(err);
+  }).finally(function(){ busy=false; });
+}
+function initMs(){
+  if(typeof msal==="undefined"){ $("msConnect").hidden=true; return; }
+  msalApp=new msal.PublicClientApplication({auth:{clientId:CFG.clientId,authority:"https://login.microsoftonline.com/"+CFG.tenant,redirectUri:location.origin+location.pathname},cache:{cacheLocation:"localStorage"}});
+  msalApp.initialize().then(function(){return msalApp.handleRedirectPromise();}).then(function(resp){
+    if(resp&&resp.account) msalApp.setActiveAccount(resp.account);
+    var acc=msalApp.getActiveAccount()||msalApp.getAllAccounts()[0];
+    if(acc){ msalApp.setActiveAccount(acc); $("msUser").textContent=acc.username; loadLive(true); }
+  }).catch(function(e){ console.warn("MSAL init:",e&&e.message); });
+  $("msConnect").onclick=function(){ loadLive(false); }; $("msRefresh").onclick=function(){ loadLive(false); };
+}
+/* Al abrir: lo último guardado (el de Proyectos) se muestra al instante mientras se revisa si hay algo nuevo. */
+FAST.get("proy:last:"+CFG.schema).then(function(c){ if(c && !ALL.length) onData(c.rows,c.sources,"datos guardados "+FAST.ago(c.savedAt)+" · revisando si hay cambios…"); });
+initMs(); postH();
+})();
+</script>
+</body>
+</html>
