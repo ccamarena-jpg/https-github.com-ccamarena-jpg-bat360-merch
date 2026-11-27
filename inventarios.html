@@ -66,11 +66,13 @@
 </div>
 
 <div class="tabs">
-  <div class="tab on" data-t="lima">📦 Lima (Chilca y Chorrillos)</div>
+  <div class="tab on" data-t="cons">🇵🇪 Consolidado nacional</div>
+  <div class="tab" data-t="lima">📦 Lima (Chilca y Chorrillos)</div>
   <div class="tab" data-t="prov">🗺️ Provincia</div>
 </div>
 
-<div id="vLima"></div>
+<div id="vCons"></div>
+<div id="vLima" hidden></div>
 <div id="vProv" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -92,7 +94,7 @@ var CFG = {
 };
 var $ = function(id){ return document.getElementById(id); };
 var norm = HW.norm, esc = HW.esc;
-var S = { lima:null, prov:null, tab:"lima", fl:{alm:"",est:"",cat:"",q:""}, fp:{ciu:"",cat:"",est:"",q:""} };
+var S = { lima:null, prov:null, tab:"cons", fc:{amb:"",blo:"dur",ubi:"",fam:""}, fl:{alm:"",est:"",cat:"",q:""}, fp:{ciu:"",cat:"",est:"",q:""} };
 function num(v){ var n=parseFloat(String(v==null?"":v).replace(",",".")); return isNaN(n)?0:n; }
 function fmt(n){ return (Math.round(n*100)/100).toLocaleString("es-PE"); }
 function postH(){ try{ parent.postMessage({h:document.documentElement.scrollHeight},"*"); }catch(e){} }
@@ -159,7 +161,7 @@ function loadLima(t){
   });
 }
 function onLima(rows,label){ S.lima=rows; setSt("stLima","✓ "+rows.length+" registros · "+label,"ok");
-  S.fl={alm:"",est:"",cat:"",q:""}; $("vLima").innerHTML=""; renderLima(); }
+  S.fl={alm:"",est:"",cat:"",q:""}; $("vLima").innerHTML=""; renderLima(); renderCons(); }
 function loadLimaLive(silent){
   setSt("stLima","Conectando con SharePoint…");
   HW.auth.token(!silent).then(loadLima).then(function(r){
@@ -192,7 +194,7 @@ function parseProv(wb){
   return rows;
 }
 function onProv(rows,label){ S.prov=rows; setSt("stProv","✓ "+rows.length+" filas · "+label,"ok");
-  S.fp={ciu:"",cat:"",est:"",q:""}; $("vProv").innerHTML=""; renderProv(); }
+  S.fp={ciu:"",cat:"",est:"",q:""}; $("vProv").innerHTML=""; renderProv(); renderCons(); }
 function loadProvLive(){
   setSt("stProv","Leyendo Google Sheet…");
   var u="https://docs.google.com/spreadsheets/d/"+CFG.sheetId+"/gviz/tq?tqx=out:csv&gid="+CFG.sheetGid;
@@ -262,8 +264,112 @@ function renderProv(){
   $("provBody").innerHTML=h; postH();
 }
 
+
+/* ═══ Consolidado nacional ═══ */
+/* Familias. Duraderos = activos que se cuentan y se desgastan (tiene sentido % en mal estado); Consumibles = material, insumos y ropa (solo cantidades).
+   Palmera y Alicorp no se incluyen. Los dispensers/glorificadores de Lima se reconocen por el nombre del producto. */
+var FAM_DUR=["Cigarreras","Dispensers","Glorificadores","Repuestos y complementos","Placas","Mobiliario HORECA","Electrónicos y TV"];
+var FAM_CON=["Material publicitario (POP)","Insumos y herramientas","Uniformes","Otros"];
+var RX_UNI=/CASACA|CAMISA|CHALECO|PANTAL|GORRA|GORRO|CASCO|BOTAS|CALZADO|MASCARILLA|MANDIL|MOCHILA|POLO|DOBLE FILTRO|PROTECTOR SOLAR/;
+var RX_INS=/DETERGENTE|LEJIA|JABON|SUAVIZANTE|QUITAMANCHAS|ESCOBA|BOLSA|CINTA|PRECINTO|TALADRO|ALCOHOL|CANALETA|EXTENSION|PALOS|PERFILES/;
+var RX_PART=/^(ACRILIC|TAPA|BANDEJ|LETRA|GOTA|SET |COSTILLA|ADAPTADOR|ANGULO|PARANTE)/;
+function famLima(r){
+  var c=norm(r.catFull), n=norm(r.prod);
+  if(/PALMERA|ALICORP/.test(c)||/PALMERA|ALICORP/.test(n)) return null;
+  if(/DESECHO/.test(c)) return "Otros";
+  if(/^HARDWARE - COMPLEMENTOS/.test(c)) return "Repuestos y complementos";
+  if(/^HARDWARE - CIGARRERAS/.test(c)) return "Cigarreras";
+  if(/^HARDWARE/.test(c)){
+    if(/GLORIFICADOR/.test(n)&&!RX_PART.test(n)) return "Glorificadores";
+    if(/DISPENSER/.test(n)&&!RX_PART.test(n)) return "Dispensers";
+    if(RX_PART.test(n)) return "Repuestos y complementos";
+    if(/LUMOS|STAR|PROSEP|PIXEL|PIANO|EXHIBIDOR/.test(n)) return "Cigarreras";
+    return "Otros"; }
+  if(/^MOBILIARIO/.test(c)) return "Mobiliario HORECA";
+  if(/^ARTEFACTO/.test(c)) return "Electrónicos y TV";
+  if(/^MATERIAL PUBLICITARIO/.test(c)) return /TTAUDIT/.test(c)?"Uniformes":"Material publicitario (POP)";
+  if(/^ACTIVOS TTAUDIT/.test(c)) return RX_UNI.test(n)?"Uniformes":(RX_INS.test(n)?"Insumos y herramientas":"Otros");
+  if(!c&&/PROSEP|EXHIBIDOR/.test(n)) return "Cigarreras";
+  return "Otros";
+}
+var PFAM={"POP":"Material publicitario (POP)","DISPENSERS":"Dispensers","PLACAS":"Placas","CIGARRERAS":"Cigarreras","INSUMOS":"Insumos y herramientas","GLORIFICADORES":"Glorificadores",
+  "HERRAMIENTAS":"Insumos y herramientas","REPUESTOS EXHIBIDORES":"Repuestos y complementos","EPP":"Uniformes","TV":"Electrónicos y TV"};
+function famProv(r){ return PFAM[norm(r.cat)]||"Otros"; }
+function consRows(){
+  var out=[];
+  (S.lima||[]).forEach(function(r){ var f=famLima(r); if(!f) return; var mal=r.est==="Mal estado";
+    out.push({amb:"Lima",ubi:"Lima · "+r.alm,fam:f,b:mal?0:r.qty,m:mal?r.qty:0,prod:r.prod}); });
+  (S.prov||[]).forEach(function(r){ out.push({amb:"Provincia",ubi:r.ciu,fam:famProv(r),b:r.b,m:r.m,prod:r.act}); });
+  return out;
+}
+function sem(p){ return p<=10?"good":(p<=25?"warn":"bad"); }
+function renderCons(){
+  var el=$("vCons");
+  if(!S.lima&&!S.prov){ el.innerHTML='<div class="empty">Carga al menos una fuente (Lima o Provincia) para ver el consolidado.</div>'; postH(); return; }
+  var all=consRows(), f=S.fc;
+  if(!$("cAmb")){
+    el.innerHTML='<div class="filters"><div><label>Ámbito</label><select id="cAmb"><option value="">Nacional</option><option>Lima</option><option>Provincia</option></select></div>'
+      +'<div><label>Tipo</label><select id="cBlo"><option value="dur">Activos duraderos</option><option value="con">Material y consumibles</option><option value="">Todo</option></select></div>'
+      +'<div><label>Ubicación</label><select id="cUbi"></select></div><div><label>Familia</label><select id="cFam"></select></div>'
+      +'<div><button class="btn" id="cCsv">⬇ Descargar CSV</button></div></div><div id="consBody"></div>';
+    $("cAmb").onchange=function(){ f.amb=this.value; f.ubi=""; renderCons(); }; $("cBlo").onchange=function(){ f.blo=this.value; f.fam=""; renderCons(); };
+    $("cUbi").onchange=function(){ f.ubi=this.value; renderCons(); }; $("cFam").onchange=function(){ f.fam=this.value; renderCons(); };
+    $("cCsv").onclick=function(){ csvCons(); };
+  }
+  var fams=f.blo==="dur"?FAM_DUR:(f.blo==="con"?FAM_CON:FAM_DUR.concat(FAM_CON));
+  var base=all.filter(function(r){ return (!f.amb||r.amb===f.amb); });
+  var ubis=uniq(base,"ubi"); if(f.ubi&&ubis.indexOf(f.ubi)<0) f.ubi="";
+  opts($("cUbi"),ubis,"Todas"); $("cUbi").value=f.ubi; opts($("cFam"),fams,"Todas"); $("cFam").value=f.fam; $("cAmb").value=f.amb; $("cBlo").value=f.blo;
+  var rows=base.filter(function(r){ return fams.indexOf(r.fam)>=0&&(!f.ubi||r.ubi===f.ubi)&&(!f.fam||r.fam===f.fam); });
+  var b=sum(rows,"b"), m=sum(rows,"m"), t=b+m, p=t?m/t*100:0;
+  var lm=rows.filter(function(r){return r.amb==="Lima";}), pv=rows.filter(function(r){return r.amb==="Provincia";});
+  var fechas=uniq(S.prov||[],"fec"), ult=fechas.length?fechas[fechas.length-1]:"", dias=ult?Math.floor((Date.now()-new Date(ult+"T00:00:00").getTime())/864e5):null;
+  var h='<div class="kpis"><div class="kpi"><b>'+fmt(t)+'</b><span>Total '+(f.blo==="dur"?"activos duraderos":f.blo==="con"?"material y consumibles":"unidades")+'</span></div>'
+    +'<div class="kpi"><b class="good">'+fmt(b)+'</b><span>Buen estado ('+(t?Math.round(b/t*100):0)+'%)</span></div>'
+    +'<div class="kpi"><b class="bad">'+fmt(m)+'</b><span>Mal estado</span></div>'
+    +'<div class="kpi"><b class="'+sem(p)+'">'+Math.round(p)+'%</b><span>% en mal estado</span></div>'
+    +'<div class="kpi"><b>'+fmt(sum(lm,"b")+sum(lm,"m"))+'</b><span>En Lima</span></div>'
+    +'<div class="kpi"><b>'+fmt(sum(pv,"b")+sum(pv,"m"))+'</b><span>En provincia</span></div>'
+    +'<div class="kpi"><b class="'+(dias!=null&&dias>30?"warn":"")+'" style="font-size:17px">'+esc(ult||"—")+'</b><span>Último conteo provincia'+(dias!=null?" · hace "+dias+" d":"")+'</span></div></div>';
+  // matriz ubicación × familia
+  var fu=f.fam?[f.fam]:fams, ub=group(rows,function(r){return r.ubi;},function(k){return {k:k,amb:"",b:0,m:0,c:{}};},function(o,r){ o.amb=r.amb; o.b+=r.b; o.m+=r.m; var c=o.c[r.fam]||(o.c[r.fam]={b:0,m:0}); c.b+=r.b; c.m+=r.m; })
+    .sort(function(a,c){ return a.amb===c.amb?(c.b+c.m)-(a.b+a.m):(a.amb==="Lima"?-1:1); });
+  var colT={}; fu.forEach(function(x){ colT[x]={b:0,m:0}; });
+  h+='<div class="card"><h3>Ubicación × familia</h3><div class="scroll" style="max-height:440px"><table><thead><tr><th>Ubicación</th>'+fu.map(function(x){return '<th class="n">'+esc(x)+'</th>';}).join("")+'<th class="n">Total</th><th class="n">% mal</th></tr></thead><tbody>'
+    +ub.map(function(o){ var tt=o.b+o.m, pp=tt?o.m/tt*100:0;
+      return '<tr><td><b>'+esc(o.k)+'</b></td>'+fu.map(function(x){ var c=o.c[x]; if(!c||(c.b+c.m)===0) return '<td class="n"></td>'; colT[x].b+=c.b; colT[x].m+=c.m;
+        return '<td class="n">'+fmt(c.b+c.m)+(c.m?' <small class="bad">('+fmt(c.m)+' mal)</small>':'')+'</td>'; }).join("")
+        +'<td class="n"><b>'+fmt(tt)+'</b></td><td class="n '+sem(pp)+'"><b>'+Math.round(pp)+'%</b></td></tr>'; }).join("")
+    +'<tr style="font-weight:700"><td>TOTAL</td>'+fu.map(function(x){ var c=colT[x]; return '<td class="n">'+fmt(c.b+c.m)+'</td>'; }).join("")+'<td class="n">'+fmt(t)+'</td><td class="n '+sem(p)+'">'+Math.round(p)+'%</td></tr>'
+    +'</tbody></table></div><p class="hint">Semáforo del % en mal estado: verde hasta 10 %, ámbar hasta 25 %, rojo por encima.</p></div>';
+  // por familia: Lima vs Provincia
+  var fr=group(rows,function(r){return r.fam;},function(k){return {k:k,lb:0,lm:0,pb:0,pm:0};},function(o,r){ if(r.amb==="Lima"){ o.lb+=r.b; o.lm+=r.m; } else { o.pb+=r.b; o.pm+=r.m; } })
+    .sort(function(a,c){ return fams.indexOf(a.k)-fams.indexOf(c.k); });
+  h+='<div class="card"><h3>Por familia · Lima vs. provincia</h3><table><thead><tr><th>Familia</th><th class="n">Lima buen</th><th class="n">Lima mal</th><th class="n">Prov. buen</th><th class="n">Prov. mal</th><th class="n">Total</th><th class="n">% mal</th></tr></thead><tbody>'
+    +fr.map(function(o){ var tt=o.lb+o.lm+o.pb+o.pm, pp=tt?(o.lm+o.pm)/tt*100:0; return '<tr><td>'+esc(o.k)+'</td><td class="n">'+fmt(o.lb)+'</td><td class="n bad">'+(o.lm?fmt(o.lm):"")+'</td><td class="n">'+fmt(o.pb)+'</td><td class="n bad">'+(o.pm?fmt(o.pm):"")+'</td><td class="n"><b>'+fmt(tt)+'</b></td><td class="n '+sem(pp)+'"><b>'+Math.round(pp)+'%</b></td></tr>'; }).join("")
+    +'</tbody></table></div>';
+  // alertas
+  var al=[]; ub.forEach(function(o){ fams.forEach(function(x){ var c=o.c[x]; if(c&&(c.b+c.m)>=10&&c.m/(c.b+c.m)>0.25) al.push({u:o.k,f:x,t:c.b+c.m,m:c.m,p:c.m/(c.b+c.m)*100}); }); });
+  al.sort(function(a,c){return c.m-a.m;});
+  h+='<div class="card"><h3>⚠ Alertas: más del 25 % en mal estado (mínimo 10 unidades)</h3>'+(al.length?'<div class="scroll" style="max-height:260px"><table><thead><tr><th>Ubicación</th><th>Familia</th><th class="n">Total</th><th class="n">Mal</th><th class="n">% mal</th></tr></thead><tbody>'
+    +al.slice(0,40).map(function(a){ return '<tr><td>'+esc(a.u)+'</td><td>'+esc(a.f)+'</td><td class="n">'+fmt(a.t)+'</td><td class="n bad">'+fmt(a.m)+'</td><td class="n bad"><b>'+Math.round(a.p)+'%</b></td></tr>'; }).join("")+'</tbody></table></div>':'<div class="status">Sin alertas con los filtros actuales.</div>')+'</div>';
+  // revisión de clasificación
+  var otros=(S.lima||[]).filter(function(r){ return famLima(r)==="Otros"; }), no={}; otros.forEach(function(r){ no[r.prod]=(no[r.prod]||0)+r.qty; });
+  var nk=Object.keys(no).sort(function(a,c){return no[c]-no[a];});
+  h+='<div class="card"><h3>Revisión de clasificación · Lima en «Otros» ('+nk.length+' productos)</h3><p class="hint" style="margin:0 0 6px">Productos de Odoo que no calzan en ninguna familia. Si alguno debe ir a una familia, indícalo y se ajusta la regla.</p><div class="scroll" style="max-height:240px"><table><tbody>'
+    +nk.slice(0,60).map(function(k){ return '<tr><td>'+esc(k)+'</td><td class="n">'+fmt(no[k])+'</td></tr>'; }).join("")+'</tbody></table></div></div>'
+    +'<p class="hint">Fuentes: Stock Odoo (Lima) y Google Sheet de provincia. Excluye Palmera y Alicorp. Los duraderos se cuentan por unidad; el consolidado no mezcla duraderos con consumibles salvo que elijas «Todo».</p>';
+  $("consBody").innerHTML=h; postH();
+}
+function csvCons(){
+  var all=consRows(), l=["Ambito,Ubicacion,Familia,Buen,Mal,Total"], g={};
+  all.forEach(function(r){ var k=r.amb+"|"+r.ubi+"|"+r.fam; if(!g[k]) g[k]={amb:r.amb,ubi:r.ubi,fam:r.fam,b:0,m:0}; g[k].b+=r.b; g[k].m+=r.m; });
+  Object.keys(g).forEach(function(k){ var o=g[k]; l.push([o.amb,o.ubi,o.fam,o.b,o.m,o.b+o.m].map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(",")); });
+  var a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+l.join("\n")],{type:"text/csv;charset=utf-8"})); a.download="inventario_consolidado.csv"; a.click();
+}
+
 /* ═══ Eventos ═══ */
-function showTab(t){ S.tab=t; document.querySelectorAll(".tab").forEach(function(e){ e.classList.toggle("on",e.dataset.t===t); }); $("vLima").hidden=t!=="lima"; $("vProv").hidden=t!=="prov"; setTimeout(postH,30); }
+function showTab(t){ S.tab=t; document.querySelectorAll(".tab").forEach(function(e){ e.classList.toggle("on",e.dataset.t===t); }); $("vCons").hidden=t!=="cons"; $("vLima").hidden=t!=="lima"; $("vProv").hidden=t!=="prov"; setTimeout(postH,30); }
 document.querySelectorAll(".tab").forEach(function(e){ e.onclick=function(){ showTab(e.dataset.t); }; });
 $("msConnect").onclick=function(){ loadLimaLive(false); }; $("limaRefresh").onclick=function(){ loadLimaLive(false); };
 $("provRefresh").onclick=loadProvLive;
@@ -274,7 +380,7 @@ $("fileProv").onchange=function(e){ var f=e.target.files[0]; if(!f) return; setS
   (isCsv?f.text():f.arrayBuffer()).then(function(d){ onProv(parseProv(XLSX.read(d,{type:isCsv?"string":"array",raw:true})),f.name+" (manual)"); }).catch(function(x){ setSt("stProv",x.message,"err"); }); };
 window.addEventListener("resize",postH);
 
-renderLima(); renderProv();
+renderLima(); renderProv(); renderCons();
 /* Al abrir: lo último guardado de cada fuente al instante, y se revisa si hay algo nuevo. */
 FAST.get("inv-lima:"+CFG.schema).then(function(c){ if(c&&c.rows&&!S.lima) onLima(c.rows,"guardado "+FAST.ago(c.savedAt)+" · revisando…"); });
 HW.auth.init(function(u){ $("msUser").textContent=u; }).then(function(has){
